@@ -28,4 +28,26 @@ object FPExercises {
 
     go(n, 1)
   }
+
+  def indexOf[T](source: Array[T], predicate: T => Boolean): Int = {
+    @tailrec
+    def go(n: Int): Int = {
+      if (n >= source.length) -1
+      else if (predicate(source(n))) n
+      else go(n + 1)
+    }
+
+    go(0)
+  }
+
+  def isSorted[T](source: Array[T], isSorted: (T, T) => Boolean): Boolean = {
+    @tailrec
+    def go(n: Int): Boolean = {
+      if (n >= source.length - 1) true
+      else if (!isSorted(source(n), source(n + 1))) false
+      else go(n + 1)
+    }
+
+    go(0)
+  }
 }
