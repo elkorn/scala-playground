@@ -2,10 +2,7 @@ package com.example
 
 import scala.annotation.tailrec
 
-/**
- * Created by elkorn on 12/5/14.
- */
-object FPExercises {
+object BasicExercises {
   def fib(n: Int): Int = {
     @tailrec
     def go(n: Int, acc: Int): Int = {

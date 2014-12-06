@@ -1,15 +1,18 @@
-import com.example.FPExercises
+import com.example.{ListHOFs, BasicExercises}
+
 object fp {
-  FPExercises.fib(3)
-  FPExercises.fib(4)
-  FPExercises.fib(5)
-  FPExercises.fib(6)
-  FPExercises.factorial(5)
-  FPExercises.indexOf[Int](Array(1,2,3), {
+  BasicExercises.fib(3)
+  BasicExercises.fib(4)
+  BasicExercises.fib(5)
+  BasicExercises.fib(6)
+  BasicExercises.factorial(5)
+  BasicExercises.indexOf[Int](Array(1,2,3), {
     case 2 => true
     case _ => false
   })
 
-  FPExercises.isSorted[Int](Array(1,2,3), {_ < _})
-  FPExercises.isSorted[Int](Array(1,2,3), {_ > _})
+  BasicExercises.isSorted[Int](Array(1,2,3), {_ < _})
+  BasicExercises.isSorted[Int](Array(1,2,3), {_ > _})
+
+  ListHOFs.product(List(2,2,3))
 }
