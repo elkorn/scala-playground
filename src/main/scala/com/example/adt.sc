@@ -17,6 +17,23 @@ object adt {
   tree1.depth()
   tree1.map[Int](_ + 3)
 
+  fold(tree1, Nil: List[Int])((a, res) => a :: res)
+  maximum2(tree1)
+  size2(tree1)
+
+  // Things to fix:
+  // - Should be tailrec.
+  // - Should allow depth calculation.
+  def fold[A, B](t: Tree[A], acc: B)(f: (A, B) => B): B = {
+    t match {
+      case Leaf(value) => f(value, acc)
+      case Branch(left, right) => fold(right, fold(left, acc)(f))(f)
+    }
+  }
+
+  def maximum2(t: Tree[Int]): Int = fold(t,0)(_ max _)
+  def size2(t: Tree[Int]): Int = fold(t,0)((_,res) => res+1)
+
   sealed trait Tree[+A] {
     def size(): Int
 
