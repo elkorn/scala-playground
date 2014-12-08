@@ -7,6 +7,9 @@ object errorHandling {
   opt.flatMap((v) => Some(v + 5))
   opt.map(_+5)
 
+  variance(List(-10,-5,1,-5))
+
+  // 4.1
   trait Option[+A] {
     def map[B](f: A => B): Option[B]
 
@@ -50,4 +53,14 @@ object errorHandling {
     def filter(f: Nothing => Boolean): Option[Nothing] = this
   }
 
+  def mean(xs: Seq[Double]): Option[Double] =
+    if (xs.isEmpty) None
+    else Some(xs.sum / xs.length)
+
+  // 4.2
+  def variance(xs: Seq[Double]): Option[Double] =
+    for (
+      m <- mean(xs);
+      v <- mean(xs.map(x => math.pow(x-m,2)))
+    ) yield v
 }
