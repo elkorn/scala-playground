@@ -39,6 +39,7 @@ object errorHandling {
     if (a == 3) Left("'a' must not be 3")
     else Right(a + 10))
 
+
   // 4.1
   trait Option[+A] {
     def map[B](f: A => B): Option[B]
@@ -105,7 +106,7 @@ object errorHandling {
     pat.matcher(s).matches
 
   def mkMatcher(p: String): Option[String => Boolean] =
-    pattern(p) map (matches)
+    pattern(p) map matches
 
   def mkMatcher_1(p: String): Option[String => Boolean] =
     for {
@@ -119,7 +120,7 @@ object errorHandling {
 
   def bothMatch(p1: String, p2: String, s: String): Option[Boolean] =
     for {
-      m1 <- mkMatcher(p1);
+      m1 <- mkMatcher(p1)
       m2 <- mkMatcher(p2)
     } yield m1(s) && m2(s)
 
@@ -130,7 +131,7 @@ object errorHandling {
   // 4.3
   def map2[A, B, C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] =
     for {
-      a <- a;
+      a <- a
       b <- b
     } yield f(a, b)
   // 4.4
@@ -141,10 +142,10 @@ object errorHandling {
     @tailrec
     def go(opts: List[Option[A]], acc: Option[List[A]]): Option[List[A]] = acc match {
       case None => None
-      case Some(acc) => opts match {
+      case Some(accumulated) => opts match {
         case None :: _ => None
-        case Some(v) :: Nil => Some(acc :+ v)
-        case Some(v) :: tail => go(tail, Some(acc :+ v))
+        case Some(v) :: Nil => Some(accumulated :+ v)
+        case Some(v) :: tail => go(tail, Some(accumulated :+ v))
       }
     }
 
@@ -155,10 +156,10 @@ object errorHandling {
     @tailrec
     def go(a: List[A], acc: Option[List[B]]): Option[List[B]] = acc match {
       case None => None
-      case Some(acc) => f(a.head) match {
+      case Some(accumulated) => f(a.head) match {
         case None => None
-        case Some(b) => if (a.tail.isEmpty) Some(acc :+ b)
-        else go(a.tail, Some(acc :+ b))
+        case Some(b) => if (a.tail.isEmpty) Some(accumulated :+ b)
+        else go(a.tail, Some(accumulated :+ b))
       }
     }
 
@@ -191,7 +192,7 @@ object errorHandling {
     def orElse[EE >: Nothing, B>:A](b: =>Either[EE,B]) = this
     def map2[EE >: Nothing, B, C](b: Either[EE, B])(f: (A, B) => C) = b match {
       case Left(e) => Left(e)
-      case Right(b) => Right(f(value,b))
+      case Right(bb) => Right(f(value,bb))
     }
   }
   // 4.8
@@ -199,10 +200,10 @@ object errorHandling {
     @tailrec
     def go(eths: List[Either[E,A]], acc: Either[E, List[A]]): Either[E, List[A]] = acc match {
       case Left(_) => acc
-      case Right(acc) => eths match {
+      case Right(accumulated) => eths match {
         case Left(err) :: tail => Left(err)
-        case Right(v) :: Nil => Right(acc :+ v)
-        case Right(v) :: tail => go(tail, Right(acc :+ v))
+        case Right(v) :: Nil => Right(accumulated :+ v)
+        case Right(v) :: tail => go(tail, Right(accumulated :+ v))
       }
     }
 
@@ -213,14 +214,13 @@ object errorHandling {
     @tailrec
     def go(a: List[A], acc: Either[E,List[B]]): Either[E,List[B]] = acc match {
       case Left(_) => acc
-      case Right(acc) => f(a.head) match {
+      case Right(accumulated) => f(a.head) match {
         case Left(err) => Left(err)
-        case Right(b) if (a.tail.isEmpty)  => Right(acc :+ b)
-        case Right(b) if (!a.tail.isEmpty)  => go(a.tail, Right(acc :+ b))
+        case Right(b) if a.tail.isEmpty  => Right(accumulated :+ b)
+        case Right(b) if a.tail.nonEmpty  => go(a.tail, Right(accumulated :+ b))
       }
     }
 
     go(a, Right(Nil: List[B]))
   }
 }
-

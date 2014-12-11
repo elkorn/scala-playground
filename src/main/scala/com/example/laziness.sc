@@ -1,11 +1,9 @@
 import scala.annotation.tailrec
-
 object laziness {
   def pair(i: => Int) = {
     lazy val j = i // delay evaluation until first referenced and cache the result
     (j, j)
   }
-
   pair {
     println("hi")
     1 + 41
@@ -23,12 +21,20 @@ object laziness {
   stream.takeWhile2(_ < 3).toList
   stream.map(_ + 5).toList
   stream.filter(_ % 2 == 1).toList
-  stream.flatMap((v)=>Stream(v+1)).toList
-
+  stream.flatMap((v) => Stream(v + 1)).toList
+  Stream(1, 2, 3, 4).map(_ + 10).filter((v) => {
+    println("filter")
+    v % 2 == 0
+  }).toList
+  Stream.cons(11, Stream(2, 3, 4).map(_ + 10)).filter(_ % 2 == 0)
   trait Stream[+A] {
     def uncons: Option[(A, Stream[A])]
 
     def isEmpty: Boolean = uncons.isEmpty
+
+    def head: Option[A]
+
+    def tail: Stream[A]
 
     // 5.1
     def toList: List[A]
@@ -78,24 +84,32 @@ object laziness {
           else b
       )
 
-    def flatMap[B](f: A => Stream[B]): Stream[B] =
-      foldRight(Stream.empty: Stream[B])((a, b) => {
-        Stream.cons(f(a).uncons.get._1, b)
-      })
-  }
+    def append[B >: A](other: Stream[B]): Stream[B] =
+      foldRight(other)((head, tail) => Stream.cons(head, tail))
 
+    def flatMap[B](f: A => Stream[B]): Stream[B] =
+      foldRight(Stream.empty: Stream[B])((a, b) => f(a) append b)
+  }
   object Stream {
     def empty[A]: Stream[A] =
       new Stream[A] {
         def uncons = None
 
+        def head = None
+
+        def tail = Stream.empty
+
         def toList = Nil
       }
 
     // Note the non-strict arguments.
-    def cons[A](head: => A, tail: => Stream[A]): Stream[A] =
+    def cons[A](theHead: => A, theTail: => Stream[A]): Stream[A] =
       new Stream[A] {
-        lazy val uncons = Some((head, tail))
+        lazy val uncons = Some((theHead, theTail))
+
+        def head = Some(theHead)
+
+        def tail = theTail
 
         def toList = {
           @tailrec
@@ -106,7 +120,7 @@ object laziness {
             }
           }
 
-          go(tail, List(head))
+          go(theTail, List(theHead))
         }
       }
 
@@ -115,5 +129,21 @@ object laziness {
       else cons(as.head, apply(as.tail: _*))
     }
   }
+  lazy val ones: Stream[Int] = Stream.cons(1, ones)
 
+  // 5.7
+  def consts[A](value: A): Stream[A] = Stream.cons(value, consts(value))
+  consts(5).take(5).toList
+
+  // 5.8
+  def from(value: Int): Stream[Int] = Stream.cons(value, from(value + 1))
+  from(3).take(8).toList
+
+  // 5.9
+  def fibs(): Stream[Int] = {
+    def go(n1: Int, n2: Int): Stream[Int] =
+      Stream.cons(n1, go(n2, n1 + n2))
+    go(0, 1)
+  }
+  fibs().take(6).toList
 }
