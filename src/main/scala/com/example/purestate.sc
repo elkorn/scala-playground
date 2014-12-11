@@ -54,6 +54,13 @@ object purestate {
         val (a, rng2) = s(rng)
         (f(a), rng2)
       }
+
+    def nonNegativeLessThan(n: Int): Rand[Int] =
+      exercises.flatMap(exercises.nonNegativeInt) { i =>
+        val mod = i % n
+        if (i + (n - 1) - mod >= 0) unit(mod)
+        else nonNegativeLessThan(n)
+      }
   }
 
   object exercises {
@@ -106,12 +113,12 @@ object purestate {
       go(rng.nextInt, Nil: List[Int], count)
     }
 
-    // 6.6
+    // 6.5
     // we need the resulting function of type Rand[Double].
     def double2: Rand[Double] =
       examples.map(nonNegativeInt)(_.toDouble / Int.MaxValue)
 
-    // 6.7
+    // 6.6
     def map2[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
       rng => {
         val (a, rng2) = ra(rng)
@@ -120,19 +127,26 @@ object purestate {
       }
 
     def intDouble2: Rand[(Int, Double)] =
-      map2(nonNegativeInt,double2)((_,_))
+      map2(nonNegativeInt, double2)((_, _))
 
-    def doubleInt2: Rand[(Double,Int)] =
-      map2(double2,nonNegativeInt)((_,_))
+    def doubleInt2: Rand[(Double, Int)] =
+      map2(double2, nonNegativeInt)((_, _))
 
-    // 6.8
+    // 6.7
     def sequence[A](fs: List[Rand[A]]): Rand[List[A]] =
-    rng => {
-        fs.foldLeft((Nil:List[A], rng))((res, r) => {
+      rng => {
+        fs.foldLeft((Nil: List[A], rng))((res, r) => {
           val n = r(res._2)
           (res._1 :+ n._1, n._2)
         })
-    }
+      }
+
+    // 6.8
+    def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] =
+      rng => {
+        val (a, rng2) = f(rng)
+        g(a)(rng2)
+      }
   }
   exercises.nonNegativeInt(simpleRng)
   exercises.double(simpleRng)
@@ -143,6 +157,7 @@ object purestate {
   exercises.double2(simpleRng)
   exercises.intDouble2(simpleRng)
   exercises.doubleInt2(simpleRng)
-  exercises.sequence(List(examples.unit(1),examples.unit(2),examples.unit(3)))(simpleRng)
+  exercises.sequence(List(examples.unit(1), examples.unit(2), examples.unit(3)))(simpleRng)
+  examples.nonNegativeLessThan(6)(simpleRng)
 }
 
