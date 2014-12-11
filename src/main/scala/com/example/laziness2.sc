@@ -28,7 +28,6 @@ object laziness2 {
     case _ => None
   }
 
-
   map2(from2(1).take(5))(_ + 3).toList
 
   def take2[A](s: Stream[A], n: Int): Stream[A] = unfold(s) {
@@ -60,8 +59,9 @@ object laziness2 {
   zipAllWith(Stream(1, 2, 3, 4, 5), Stream(3, 4, 6))((_, _)).toList
 
   def startsWith[A](s1: Stream[A], s2: Stream[A]): Boolean =
-    takeWhile2(zipAllWith(s1, s2)((_, _)))(!_._2.nonEmpty).forall {
-      case (Some(a), Some(b)) => a == b
+    takeWhile2(zipAllWith(s1, s2)((_, _)))(_._2.nonEmpty).forall {
+      case (Some(a), Some(b)) =>
+        a == b
       case _ => false
     }
 
@@ -69,11 +69,12 @@ object laziness2 {
     s1.map(Some(_))
       .zipAll(s2.map(Some(_)), None, None)
       .takeWhile({
-      case (Some(a), Some(b)) => true
-      case _ => false
+      case (None, Some(_)) => false
+      case (Some(_), None) => false
+      case _ => true
     })
       .forall({
-      case (Some(a), Some(b)) => a == b
+      case (Some(a), Some(b)) if a == b => true
       case _ => false
     })
 
@@ -88,6 +89,43 @@ object laziness2 {
     case _ => false
   }
 
-  hasSubsequence(Stream(1,2,3,4,5), Stream(4,5))
-  hasSubsequence(Stream(1,2,3,4,5), Stream(5,4))
+  hasSubsequence(Stream(1, 2, 3, 4, 5), Stream(4, 5))
+  hasSubsequence(Stream(1, 2, 3, 4, 5), Stream(5, 4))
+
+  def tails[A](s: Stream[A]): Stream[Stream[A]] = unfold(s) {
+    case Stream.cons(head, tail) => Some((Stream.cons(head, tail), tail))
+    case _ => None
+  } append Empty
+
+  tails(Stream(1, 2, 3)).map(_.toList).toList
+
+  Stream.empty.toList
+
+  def hasSubsequence2[A](s: Stream[A], sub: Stream[A]): Boolean =
+    tails(s).exists(startsWith(_, sub))
+
+  def hasSubsequenceWithError[A](s: Stream[A], sub: Stream[A]): Boolean =
+    tails(s).exists(startsWith2(_, sub))
+
+  hasSubsequence2(Stream(1, 2, 3, 4, 5), Stream(4, 5))
+  hasSubsequence2(Stream(1, 2, 3, 4, 5), Stream(5, 4))
+
+  hasSubsequenceWithError(Stream(1, 2, 3, 4, 5), Stream(4, 5))
+  hasSubsequenceWithError(Stream(1, 2, 3, 4, 5), Stream(5, 4))
+
+  def foldRight[A, B](as: Stream[A], acc: B)(f: (A, B) => B): B = {
+    as match {
+      case Stream.cons(x, xs) => f(x, foldRight(xs, acc)(f))
+      case Empty => acc
+    }
+  }
+
+  def scanRight[A, B](s: Stream[A], z: B)(f: (A, => B) => B): Stream[B] =
+    foldRight(s, (z, Stream(z)))((a, pair) => {
+      println(a, pair._1)
+      val b2 = f(a, pair._1)
+      (b2, Stream.cons(b2, pair._2))
+    })._2
+
+  scanRight(Stream(1, 2, 3), 0)(_ + _).toList
 }
