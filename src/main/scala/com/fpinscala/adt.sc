@@ -34,6 +34,16 @@ object adt {
   def maximum2(t: Tree[Int]): Int = fold(t,0)(_ max _)
   def size2(t: Tree[Int]): Int = fold(t,0)((_,res) => res+1)
 
+  def maximum(t: Tree[Int]): Int = {
+    var max: Int = Int.MinValue
+    t match {
+      case Branch(l: Tree[Int], r: Tree[Int]) => maximum(l) max maximum(r)
+      case Leaf(v: Int) if v > max =>
+        max = v
+        v
+    }
+  }
+
   sealed trait Tree[+A] {
     def size(): Int
 
@@ -49,7 +59,7 @@ object adt {
 
     def map[B](f: A => B) = Leaf(f(value))
 
-    override def toString() = value toString
+    override def toString = value.toString
   }
 
   case class Branch[A](left: Tree[A], right: Tree[A]) extends Tree[A] {
@@ -59,16 +69,6 @@ object adt {
 
     def map[B](f: A => B) = Branch(left.map(f), right.map(f))
 
-    override def toString() = s"($left ^ $right)"
-  }
-
-  def maximum(t: Tree[Int]): Int = {
-    var max: Int = Int.MinValue
-    t match {
-      case Branch(l: Tree[Int], r: Tree[Int]) => maximum(l) max maximum(r)
-      case Leaf(v: Int) if (v > max) =>
-        max = v
-        v
-    }
+    override def toString = s"($left ^ $right)"
   }
 }

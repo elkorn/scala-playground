@@ -1,5 +1,7 @@
 import java.util.regex.{Pattern, PatternSyntaxException}
+
 import scala.annotation.tailrec
+
 object errorHandling {
   val opt = Some(1)
   opt.getOrElse(3)
@@ -21,7 +23,14 @@ object errorHandling {
   traverse(List(1, 2, 3))((a) =>
     if (a == 3) None
     else Some(a + 10))
-  case class Employee(name: String, age: Int, salary: Int)
+
+  // 4.2
+  def variance(xs: Seq[Double]): Option[Double] =
+    for (
+      m <- mean(xs);
+      v <- mean(xs.map(x => math.pow(x - m, 2)))
+    ) yield v
+
   for {
     age <- Right(42)
     name <- Left("Invalid name")
@@ -39,6 +48,115 @@ object errorHandling {
     if (a == 3) Left("'a' must not be 3")
     else Right(a + 10))
 
+  def mean(xs: Seq[Double]): Option[Double] =
+    if (xs.isEmpty) None
+    else Some(xs.sum / xs.length)
+
+  def lift[A, B](f: A => B): Option[A] => Option[B] = _ map f
+
+  def doesMatch(p: String, s: String): Option[Boolean] =
+    for {
+      m <- mkMatcher_1(p)
+    } yield m(s)
+
+  def mkMatcher_1(p: String): Option[String => Boolean] =
+    for {
+      p <- pattern(p)
+    } yield matches(p)
+
+  def bothMatch(p1: String, p2: String, s: String): Option[Boolean] =
+    for {
+      m1 <- mkMatcher(p1)
+      m2 <- mkMatcher(p2)
+    } yield m1(s) && m2(s)
+
+  def mkMatcher(p: String): Option[String => Boolean] =
+    pattern(p) map matches
+
+  def pattern(s: String): Option[Pattern] =
+    try {
+      Some(Pattern.compile(s))
+    } catch {
+      case e: PatternSyntaxException => None
+    }
+
+  def matches(pat: Pattern)(s: String): Boolean =
+    pat.matcher(s).matches
+
+  def bothMatch_1(p1: String, p2: String, s: String): Option[Boolean] =
+    mkMatcher(p1).flatMap(
+      m1 => mkMatcher(p2) map (
+        m2 => m1(s) && m2(s)))
+
+  // 4.4
+  def bothMatch_2(p1: String, p2: String, s: String): Option[Boolean] =
+    map2(mkMatcher(p1), mkMatcher(p2))((m1, m2) => m1(s) && m2(s))
+
+  // 4.3
+  def map2[A, B, C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] =
+    for {
+      a <- a
+      b <- b
+    } yield f(a, b)
+
+  // 4.5
+  def sequence[A](opts: List[Option[A]]): Option[List[A]] = {
+    @tailrec
+    def go(opts: List[Option[A]], acc: Option[List[A]]): Option[List[A]] = acc match {
+      case None => None
+      case Some(accumulated) => opts match {
+        case None :: _ => None
+        case Some(v) :: Nil => Some(accumulated :+ v)
+        case Some(v) :: tail => go(tail, Some(accumulated :+ v))
+      }
+    }
+
+    go(opts, Some(Nil: List[A]))
+  }
+
+  // 4.6
+  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = {
+    @tailrec
+    def go(a: List[A], acc: Option[List[B]]): Option[List[B]] = acc match {
+      case None => None
+      case Some(accumulated) => f(a.head) match {
+        case None => None
+        case Some(b) => if (a.tail.isEmpty) Some(accumulated :+ b)
+        else go(a.tail, Some(accumulated :+ b))
+      }
+    }
+
+    go(a, Some(Nil: List[B]))
+  }
+
+  // 4.8
+  def eitherSequence[E, A](eths: List[Either[E, A]]): Either[E, List[A]] = {
+    @tailrec
+    def go(eths: List[Either[E, A]], acc: Either[E, List[A]]): Either[E, List[A]] = acc match {
+      case Left(_) => acc
+      case Right(accumulated) => eths match {
+        case Left(err) :: tail => Left(err)
+        case Right(v) :: Nil => Right(accumulated :+ v)
+        case Right(v) :: tail => go(tail, Right(accumulated :+ v))
+      }
+    }
+
+    go(eths, Right(Nil: List[A]))
+  }
+
+  def eitherTraverse[E, A, B](a: List[A])(f: A => Either[E, B]): Either[E, List[B]] = {
+    @tailrec
+    def go(a: List[A], acc: Either[E, List[B]]): Either[E, List[B]] = acc match {
+      case Left(_) => acc
+      case Right(accumulated) => f(a.head) match {
+        case Left(err) => Left(err)
+        case Right(b) if a.tail.isEmpty => Right(accumulated :+ b)
+        case Right(b) if a.tail.nonEmpty => go(a.tail, Right(accumulated :+ b))
+      }
+    }
+
+    go(a, Right(Nil: List[B]))
+  }
 
   // 4.1
   trait Option[+A] {
@@ -52,6 +170,20 @@ object errorHandling {
 
     def filter(f: A => Boolean): Option[A]
   }
+
+  // 4.7
+  trait Either[+E, +A] {
+    def map[B](f: A => B): Either[E, B]
+
+    def flatMap[EE >: E, B >: A](b: A => Either[EE, B]): Either[EE, B]
+
+    def orElse[EE >: E, B >: A](b: => Either[EE, B])
+
+    def map2[EE >: E, B, C](b: Either[EE, B])(f: (A, B) => C):
+    Either[EE, C]
+  }
+
+  case class Employee(name: String, age: Int, salary: Int)
 
   case class Some[+A](get: A) extends Option[A] {
     def map[B](f: A => B): Option[B] = Some(f(get))
@@ -72,6 +204,29 @@ object errorHandling {
       else None
   }
 
+  case class Left[+E](value: E) extends Either[E, Nothing] {
+    def map[B](f: Nothing => B) = this
+
+    def flatMap[EE >: E, B >: Nothing](b: Nothing => Either[EE, B]) = this
+
+    def orElse[EE >: E, B >: Nothing](b: => Either[EE, B]) = b
+
+    def map2[EE >: E, B, C](b: Either[EE, B])(f: (Nothing, B) => C) = this
+  }
+
+  case class Right[+A](value: A) extends Either[Nothing, A] {
+    def map[B](f: A => B) = Right(f(value))
+
+    def flatMap[EE >: Nothing, B >: A](b: A => Either[EE, B]) = b(value)
+
+    def orElse[EE >: Nothing, B >: A](b: => Either[EE, B]) = this
+
+    def map2[EE >: Nothing, B, C](b: Either[EE, B])(f: (A, B) => C) = b match {
+      case Left(e) => Left(e)
+      case Right(bb) => Right(f(value, bb))
+    }
+  }
+
   case object None extends Option[Nothing] {
     def map[B](f: Nothing => B): Option[B] = this
 
@@ -84,143 +239,4 @@ object errorHandling {
     def filter(f: Nothing => Boolean): Option[Nothing] = this
   }
 
-  def mean(xs: Seq[Double]): Option[Double] =
-    if (xs.isEmpty) None
-    else Some(xs.sum / xs.length)
-  // 4.2
-  def variance(xs: Seq[Double]): Option[Double] =
-    for (
-      m <- mean(xs);
-      v <- mean(xs.map(x => math.pow(x - m, 2)))
-    ) yield v
-  def lift[A, B](f: A => B): Option[A] => Option[B] = _ map f
-
-  def pattern(s: String): Option[Pattern] =
-    try {
-      Some(Pattern.compile(s))
-    } catch {
-      case e: PatternSyntaxException => None
-    }
-
-  def matches(pat: Pattern)(s: String): Boolean =
-    pat.matcher(s).matches
-
-  def mkMatcher(p: String): Option[String => Boolean] =
-    pattern(p) map matches
-
-  def mkMatcher_1(p: String): Option[String => Boolean] =
-    for {
-      p <- pattern(p)
-    } yield matches(p)
-
-  def doesMatch(p: String, s: String): Option[Boolean] =
-    for {
-      m <- mkMatcher_1(p)
-    } yield m(s)
-
-  def bothMatch(p1: String, p2: String, s: String): Option[Boolean] =
-    for {
-      m1 <- mkMatcher(p1)
-      m2 <- mkMatcher(p2)
-    } yield m1(s) && m2(s)
-
-  def bothMatch_1(p1: String, p2: String, s: String): Option[Boolean] =
-    mkMatcher(p1).flatMap(
-      m1 => mkMatcher(p2) map (
-        m2 => m1(s) && m2(s)))
-  // 4.3
-  def map2[A, B, C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] =
-    for {
-      a <- a
-      b <- b
-    } yield f(a, b)
-  // 4.4
-  def bothMatch_2(p1: String, p2: String, s: String): Option[Boolean] =
-    map2(mkMatcher(p1), mkMatcher(p2))((m1, m2) => m1(s) && m2(s))
-  // 4.5
-  def sequence[A](opts: List[Option[A]]): Option[List[A]] = {
-    @tailrec
-    def go(opts: List[Option[A]], acc: Option[List[A]]): Option[List[A]] = acc match {
-      case None => None
-      case Some(accumulated) => opts match {
-        case None :: _ => None
-        case Some(v) :: Nil => Some(accumulated :+ v)
-        case Some(v) :: tail => go(tail, Some(accumulated :+ v))
-      }
-    }
-
-    go(opts, Some(Nil: List[A]))
-  }
-  // 4.6
-  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = {
-    @tailrec
-    def go(a: List[A], acc: Option[List[B]]): Option[List[B]] = acc match {
-      case None => None
-      case Some(accumulated) => f(a.head) match {
-        case None => None
-        case Some(b) => if (a.tail.isEmpty) Some(accumulated :+ b)
-        else go(a.tail, Some(accumulated :+ b))
-      }
-    }
-
-    go(a, Some(Nil: List[B]))
-  }
-  // 4.7
-  trait Either[+E, +A] {
-    def map[B](f: A => B): Either[E, B]
-
-    def flatMap[EE >: E, B >: A](b:A => Either[EE, B]): Either[EE, B]
-
-    def orElse[EE >: E, B>:A](b: =>Either[EE,B])
-
-    def map2[EE >: E, B, C](b: Either[EE, B])(f: (A, B) => C):
-    Either[EE, C]
-  }
-
-  case class Left[+E](value: E) extends Either[E, Nothing] {
-    def map[B](f: Nothing => B) = this
-
-    def flatMap[EE >: E, B >: Nothing](b: Nothing => Either[EE, B]) = this
-    def orElse[EE >: E, B>:Nothing](b: =>Either[EE,B]) = b
-    def map2[EE >: E, B, C](b: Either[EE, B])(f: (Nothing, B) => C) = this
-  }
-
-  case class Right[+A](value: A) extends Either[Nothing, A] {
-    def map[B](f: A => B) = Right(f(value))
-
-    def flatMap[EE >: Nothing, B >: A](b: A => Either[EE, B]) = b(value)
-    def orElse[EE >: Nothing, B>:A](b: =>Either[EE,B]) = this
-    def map2[EE >: Nothing, B, C](b: Either[EE, B])(f: (A, B) => C) = b match {
-      case Left(e) => Left(e)
-      case Right(bb) => Right(f(value,bb))
-    }
-  }
-  // 4.8
-  def eitherSequence[E,A](eths: List[Either[E,A]]): Either[E,List[A]] = {
-    @tailrec
-    def go(eths: List[Either[E,A]], acc: Either[E, List[A]]): Either[E, List[A]] = acc match {
-      case Left(_) => acc
-      case Right(accumulated) => eths match {
-        case Left(err) :: tail => Left(err)
-        case Right(v) :: Nil => Right(accumulated :+ v)
-        case Right(v) :: tail => go(tail, Right(accumulated :+ v))
-      }
-    }
-
-    go(eths, Right(Nil:List[A]))
-  }
-
-  def eitherTraverse[E, A, B](a: List[A])(f: A => Either[E,B]): Either[E, List[B]] = {
-    @tailrec
-    def go(a: List[A], acc: Either[E,List[B]]): Either[E,List[B]] = acc match {
-      case Left(_) => acc
-      case Right(accumulated) => f(a.head) match {
-        case Left(err) => Left(err)
-        case Right(b) if a.tail.isEmpty  => Right(accumulated :+ b)
-        case Right(b) if a.tail.nonEmpty  => go(a.tail, Right(accumulated :+ b))
-      }
-    }
-
-    go(a, Right(Nil: List[B]))
-  }
 }

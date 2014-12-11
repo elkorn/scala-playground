@@ -1,4 +1,5 @@
-import com.example.BasicExercises
+import com.fpinscala.BasicExercises
+
 import scala.annotation.tailrec
 object fp {
   BasicExercises.fib(3)

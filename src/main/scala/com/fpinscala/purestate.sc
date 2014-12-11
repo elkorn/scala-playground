@@ -2,6 +2,11 @@ import scala.annotation.tailrec
 
 object purestate {
 
+  // Functions of type RNG => (A, RNG) describe state actions which transform RNG states.
+  // These actions can be built up and combined.
+  type Rand[+A] = RNG => (A, RNG)
+  val simpleRng: RNG = RNG.simple(2)
+
   trait RNG {
     /**
      * Returning the state that would be mutated in place in OOP is a general pattern in pure FP.
@@ -19,12 +24,6 @@ object purestate {
       }
     }
   }
-
-  // Functions of type RNG => (A, RNG) describe state actions which transform RNG states.
-  // These actions can be built up and combined.
-  type Rand[+A] = RNG => (A, RNG)
-
-  val simpleRng: RNG = RNG.simple(2)
 
   object examples {
     // Reusing the rng allows to have repeatable results.
@@ -141,27 +140,27 @@ object purestate {
         })
       }
 
-    // 6.8
-    def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] =
-      rng => {
-        val (a, rng2) = f(rng)
-        g(a)(rng2)
+    def map2ViaFlatMap[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = {
+      // This could actually be a for comprehension
+      // if I somehow implemented it as methods of Rand.
+      flatMap(ra) { a =>
+        mapViaFlatMap(rb) {
+          b => f(a, b)
+        }
       }
+    }
 
     def mapViaFlatMap[A, B](s: Rand[A])(f: A => B): Rand[B] =
       flatMap(s) { i =>
         examples.unit(f(i))
       }
 
-    def map2ViaFlatMap[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = {
-      // This could actually be a for comprehension
-      // if I somehow implemented it as methods of Rand.
-      flatMap(ra){ a=>
-        mapViaFlatMap(rb) {
-          b => f(a,b)
-        }
+    // 6.8
+    def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] =
+      rng => {
+        val (a, rng2) = f(rng)
+        g(a)(rng2)
       }
-    }
   }
 
   exercises.nonNegativeInt(simpleRng)

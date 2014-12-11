@@ -1,9 +1,11 @@
 import scala.annotation.tailrec
+
 object laziness {
   def pair(i: => Int) = {
     lazy val j = i // delay evaluation until first referenced and cache the result
     (j, j)
   }
+
   pair {
     println("hi")
     1 + 41
@@ -27,6 +29,7 @@ object laziness {
     v % 2 == 0
   }).toList
   Stream.cons(11, Stream(2, 3, 4).map(_ + 10)).filter(_ % 2 == 0)
+
   trait Stream[+A] {
     def uncons: Option[(A, Stream[A])]
 
@@ -90,6 +93,7 @@ object laziness {
     def flatMap[B](f: A => Stream[B]): Stream[B] =
       foldRight(Stream.empty: Stream[B])((a, b) => f(a) append b)
   }
+
   object Stream {
     def empty[A]: Stream[A] =
       new Stream[A] {
@@ -129,14 +133,17 @@ object laziness {
       else cons(as.head, apply(as.tail: _*))
     }
   }
+
   lazy val ones: Stream[Int] = Stream.cons(1, ones)
 
   // 5.7
   def consts[A](value: A): Stream[A] = Stream.cons(value, consts(value))
+
   consts(5).take(5).toList
 
   // 5.8
   def from(value: Int): Stream[Int] = Stream.cons(value, from(value + 1))
+
   from(3).take(8).toList
 
   // 5.9
@@ -145,5 +152,6 @@ object laziness {
       Stream.cons(n1, go(n2, n1 + n2))
     go(0, 1)
   }
+
   fibs().take(6).toList
 }
