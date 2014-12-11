@@ -1,5 +1,7 @@
 import scala.annotation.tailrec
+
 object purestate {
+
   trait RNG {
     /**
      * Returning the state that would be mutated in place in OOP is a general pattern in pure FP.
@@ -7,6 +9,7 @@ object purestate {
      */
     def nextInt: (Int, RNG)
   }
+
   object RNG {
     def simple(seed: Long): RNG = new RNG {
       def nextInt = {
@@ -16,6 +19,11 @@ object purestate {
       }
     }
   }
+
+  // Functions of type RNG => (A, RNG) describe state actions which transform RNG states.
+  // These actions can be built up and combined.
+  type Rand[+A] = RNG => (A, RNG)
+
   val simpleRng: RNG = RNG.simple(2)
 
   object examples {
@@ -35,41 +43,52 @@ object purestate {
     }
 
     randomPair2(simpleRng)
+
+    // An rng returning a constant.
+    def unit[A](a: A): Rand[A] =
+      rng => (a, rng)
+
+    // Transform the output of a state action without modifying the state itself.
+    def map[A, B](s: Rand[A])(f: A => B): Rand[B] =
+      rng => {
+        val (a, rng2) = s(rng)
+        (f(a), rng2)
+      }
   }
 
   object exercises {
     // 6.1
-    def positiveInt(rng: RNG): (Int, RNG) = {
+    def nonNegativeInt(rng: RNG): (Int, RNG) = {
       val (nextInt, rng2) = rng.nextInt
-      if (nextInt == Int.MinValue) positiveInt(rng2)
+      if (nextInt == Int.MinValue) nonNegativeInt(rng2)
       else (nextInt.abs, rng2)
     }
 
     // 6.2
-    def positiveDouble(rng: RNG): (Double, RNG) = {
-      val (result, rng2) = positiveInt(rng)
+    def double(rng: RNG): (Double, RNG) = {
+      val (result, rng2) = nonNegativeInt(rng)
       (result.toDouble / Int.MaxValue, rng2)
     }
 
     // 6.3
-    def positiveIntDouble(rng: RNG): ((Int, Double), RNG) = {
-      val (r1, rng2) = positiveInt(rng)
-      val (r2, rng3) = positiveDouble(rng2)
+    def intDouble(rng: RNG): ((Int, Double), RNG) = {
+      val (r1, rng2) = nonNegativeInt(rng)
+      val (r2, rng3) = double(rng2)
 
       ((r1, r2), rng3)
     }
 
-    def positiveDoubleInt(rng: RNG): ((Double, Int), RNG) = {
-      val (r1, rng2) = positiveDouble(rng)
-      val (r2, rng3) = positiveInt(rng2)
+    def doubleInt(rng: RNG): ((Double, Int), RNG) = {
+      val (r1, rng2) = double(rng)
+      val (r2, rng3) = nonNegativeInt(rng2)
 
       ((r1, r2), rng3)
     }
 
-    def positiveDouble3(rng: RNG): ((Double, Double, Double), RNG) = {
-      val (r1, rng2) = positiveDouble(rng)
-      val (r2, rng3) = positiveDouble(rng2)
-      val (r3, rng4) = positiveDouble(rng3)
+    def double3(rng: RNG): ((Double, Double, Double), RNG) = {
+      val (r1, rng2) = double(rng)
+      val (r2, rng3) = double(rng2)
+      val (r3, rng4) = double(rng3)
 
       ((r1, r2, r3), rng4)
     }
@@ -80,18 +99,50 @@ object purestate {
       def go(result: (Int, RNG), acc: List[Int], remaining: Int): (List[Int], RNG) = {
         if (remaining == 0) (acc :+ result._1, result._2)
         else {
-          go(result._2.nextInt, acc :+ result._1, remaining-1)
+          go(result._2.nextInt, acc :+ result._1, remaining - 1)
         }
       }
 
-      go(rng.nextInt, Nil:List[Int], count)
+      go(rng.nextInt, Nil: List[Int], count)
+    }
+
+    // 6.6
+    // we need the resulting function of type Rand[Double].
+    def double2: Rand[Double] =
+      examples.map(nonNegativeInt)(_.toDouble / Int.MaxValue)
+
+    // 6.7
+    def map2[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
+      rng => {
+        val (a, rng2) = ra(rng)
+        val (b, rng3) = rb(rng2)
+        (f(a, b), rng3)
+      }
+
+    def intDouble2: Rand[(Int, Double)] =
+      map2(nonNegativeInt,double2)((_,_))
+
+    def doubleInt2: Rand[(Double,Int)] =
+      map2(double2,nonNegativeInt)((_,_))
+
+    // 6.8
+    def sequence[A](fs: List[Rand[A]]): Rand[List[A]] =
+    rng => {
+        fs.foldLeft((Nil:List[A], rng))((res, r) => {
+          val n = r(res._2)
+          (res._1 :+ n._1, n._2)
+        })
     }
   }
-  exercises.positiveInt(simpleRng)
-  exercises.positiveDouble(simpleRng)
-  exercises.positiveIntDouble(simpleRng)
-  exercises.positiveDoubleInt(simpleRng)
-  exercises.positiveDouble3(simpleRng)
+  exercises.nonNegativeInt(simpleRng)
+  exercises.double(simpleRng)
+  exercises.intDouble(simpleRng)
+  exercises.doubleInt(simpleRng)
+  exercises.double3(simpleRng)
   exercises.ints(10)(simpleRng)
+  exercises.double2(simpleRng)
+  exercises.intDouble2(simpleRng)
+  exercises.doubleInt2(simpleRng)
+  exercises.sequence(List(examples.unit(1),examples.unit(2),examples.unit(3)))(simpleRng)
 }
 
