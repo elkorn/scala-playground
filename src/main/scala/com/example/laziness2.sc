@@ -58,6 +58,7 @@ object laziness2 {
 
   zipAllWith(Stream(1, 2, 3, 4, 5), Stream(3, 4, 6))((_, _)).toList
 
+  // 5.13
   def startsWith[A](s1: Stream[A], s2: Stream[A]): Boolean =
     takeWhile2(zipAllWith(s1, s2)((_, _)))(_._2.nonEmpty).forall {
       case (Some(a), Some(b)) =>
@@ -68,13 +69,8 @@ object laziness2 {
   def startsWith2[A](s1: Stream[A], s2: Stream[A]): Boolean =
     s1.map(Some(_))
       .zipAll(s2.map(Some(_)), None, None)
-      .takeWhile({
-      case (None, Some(_)) => false
-      case (Some(_), None) => false
-      case _ => true
-    })
       .forall({
-      case (Some(a), Some(b)) if a == b => true
+      case (Some(a), Some(b)) => a == b
       case _ => false
     })
 
@@ -82,6 +78,7 @@ object laziness2 {
   startsWith(Stream(1, 2, 3, 4, 5), Stream(2, 3))
   startsWith2(Stream(1, 2, 3, 4, 5), Stream(1, 2, 3))
   startsWith2(Stream(1, 2, 3, 4, 5), Stream(2, 3))
+  startsWith2(Stream(1, 2, 3, 4, 5), Stream(5, 4))
 
   def hasSubsequence[A](s: Stream[A], sub: Stream[A]): Boolean = s match {
     case Stream.cons(_, _) if startsWith(s, sub) => true
@@ -92,6 +89,7 @@ object laziness2 {
   hasSubsequence(Stream(1, 2, 3, 4, 5), Stream(4, 5))
   hasSubsequence(Stream(1, 2, 3, 4, 5), Stream(5, 4))
 
+  // 5.14
   def tails[A](s: Stream[A]): Stream[Stream[A]] = unfold(s) {
     case Stream.cons(head, tail) => Some((Stream.cons(head, tail), tail))
     case _ => None
@@ -120,9 +118,9 @@ object laziness2 {
     }
   }
 
+  // 5.15
   def scanRight[A, B](s: Stream[A], z: B)(f: (A, => B) => B): Stream[B] =
     foldRight(s, (z, Stream(z)))((a, pair) => {
-      println(a, pair._1)
       val b2 = f(a, pair._1)
       (b2, Stream.cons(b2, pair._2))
     })._2
