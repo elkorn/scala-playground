@@ -147,7 +147,23 @@ object purestate {
         val (a, rng2) = f(rng)
         g(a)(rng2)
       }
+
+    def mapViaFlatMap[A, B](s: Rand[A])(f: A => B): Rand[B] =
+      flatMap(s) { i =>
+        examples.unit(f(i))
+      }
+
+    def map2ViaFlatMap[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = {
+      // This could actually be a for comprehension
+      // if I somehow implemented it as methods of Rand.
+      flatMap(ra){ a=>
+        mapViaFlatMap(rb) {
+          b => f(a,b)
+        }
+      }
+    }
   }
+
   exercises.nonNegativeInt(simpleRng)
   exercises.double(simpleRng)
   exercises.intDouble(simpleRng)
@@ -159,5 +175,7 @@ object purestate {
   exercises.doubleInt2(simpleRng)
   exercises.sequence(List(examples.unit(1), examples.unit(2), examples.unit(3)))(simpleRng)
   examples.nonNegativeLessThan(6)(simpleRng)
+  exercises.mapViaFlatMap(examples.unit(28))(_-5)(simpleRng)
+  exercises.map2ViaFlatMap(examples.unit(0),examples.unit(9))(_+_)(simpleRng)
 }
 
