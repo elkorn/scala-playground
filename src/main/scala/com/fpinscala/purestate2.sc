@@ -1,8 +1,6 @@
 
 
 object purestate2 {
-  // A computation that carries some state along == state action | state transition | statement.
-
   val simpleRng: RNG = RNG.simple(2)
 
   // 6.10
