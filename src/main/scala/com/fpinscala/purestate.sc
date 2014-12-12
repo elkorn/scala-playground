@@ -5,6 +5,10 @@ object purestate {
   // Functions of type RNG => (A, RNG) describe state actions which transform RNG states.
   // These actions can be built up and combined.
   type Rand[+A] = RNG => (A, RNG)
+
+  // A computation that carries some state along == state action | state transition | statement.
+  type State[S, +A] = S => (A, S)
+
   val simpleRng: RNG = RNG.simple(2)
 
   trait RNG {
@@ -54,12 +58,23 @@ object purestate {
         (f(a), rng2)
       }
 
+    def mapViaGeneralMap[A, B](s: Rand[A])(f: A => B): Rand[B] =
+      generalMap(s)(f)
+
+    def generalMap[S, A, B](a: S => (A, S))(f: A => B): S => (B, S) =
+      s => {
+        val (r, s2) = a(s)
+        (f(r), s2)
+      }
+
     def nonNegativeLessThan(n: Int): Rand[Int] =
       exercises.flatMap(exercises.nonNegativeInt) { i =>
         val mod = i % n
         if (i + (n - 1) - mod >= 0) unit(mod)
         else nonNegativeLessThan(n)
       }
+
+    def rollDie: Rand[Int] = map(nonNegativeLessThan(6))(_ + 1)
   }
 
   object exercises {
@@ -174,7 +189,9 @@ object purestate {
   exercises.doubleInt2(simpleRng)
   exercises.sequence(List(examples.unit(1), examples.unit(2), examples.unit(3)))(simpleRng)
   examples.nonNegativeLessThan(6)(simpleRng)
-  exercises.mapViaFlatMap(examples.unit(28))(_-5)(simpleRng)
-  exercises.map2ViaFlatMap(examples.unit(0),examples.unit(9))(_+_)(simpleRng)
+  exercises.mapViaFlatMap(examples.unit(28))(_ - 5)(simpleRng)
+  exercises.map2ViaFlatMap(examples.unit(0), examples.unit(9))(_ + _)(simpleRng)
+  examples.rollDie(simpleRng)
+  examples.mapViaGeneralMap(examples.unit(28))(_ - 5)(simpleRng)
 }
 
