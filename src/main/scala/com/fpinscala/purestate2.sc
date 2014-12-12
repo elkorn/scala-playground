@@ -38,13 +38,20 @@ object purestate2 {
         b <- sb
       } yield f(a, b)
 
+    def get: State[S, S] = State(s => (s, s))
 
+    def set(value: S): State[S, Unit] = State(_ => ((), value))
+
+    def modify(f: S => S): State[S, Unit] = for {
+      s <- get
+      _ <- set(f(s))
+    } yield ()
   }
 
   // How could I use Rand here idiomatically?
   State.unit[RNG, Int](12).map2(State.unit(3))(_ + _).run(simpleRng)
   State.sequence[RNG, Int](List(State.unit(12), State.unit(3))).run(simpleRng)
-
+  State.unit[Int, Int](1).modify(_ + 18).run(13)
   trait RNG {
     /**
      * Returning the state that would be mutated in place in OOP is a general pattern in pure FP.
