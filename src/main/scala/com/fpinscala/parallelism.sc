@@ -1,8 +1,12 @@
+import java.util.concurrent
+import java.util.concurrent.{Callable, ExecutorService}
+
+import scala.concurrent.duration._
+import scala.concurrent.{Await, CanAwait, ExecutionContext, Future}
+import scala.util.{Success, Try}
 
 object parallelism {
-
-  // What should go here?
-  type Par[A] = A
+  type Par[A] = ExecutorService => Future[A]
 
   def nonParallelizableSum(ints: List[Int]): Int =
     ints.foldLeft(0)(_ + _)
@@ -32,7 +36,7 @@ object parallelism {
 
   def parSum2(inputs: IndexedSeq[Int]): Par[Int] =
     if (inputs.size <= 1)
-      inputs.headOption.getOrElse(0)
+      Par(Par.UnitFuture(inputs.headOption.getOrElse(0)))
     else {
       val (l, r) = MyIdea.inHalf(inputs)
       // Inexplicit forking:
@@ -61,50 +65,98 @@ object parallelism {
   }
 
   object Par {
-    /**
-     * Takes a computation and returns the description of its async evaluation.
-     * It's a *derived* combinator, meaning that it's expressed solely in terms of other combinators.
-     * @param computation an unevaluated A
-     * @tparam A computation result type
-     * @return a computation that might be evaluated in a separate thread
-     */
-    def lazyUnit[A](computation: => A): Par[A] = fork(unit(computation))
-
-    // Gives parallelism control to the programmer.
-    // Problems solved:
-    // - instantiating parallelism too strictly,
-    // - not being able to choose whether a task should be performed async.
-    // If `fork` was to run the provided computation immediately, its implementation would require knowledge about
-    // parallelization resources (e.g. have a global thread pool).
-    // This is unwanted here, we want to give more fine-grained control to the user.
-    def fork[A](a: => Par[A]): Par[A] = a
 
     /**
      * @param parallelComputation a parallel computation
      * @tparam A computation result typeA
      * @return resulting value extracted from a parallel computation.
      */
-    def get[A](parallelComputation: Par[A]): A = parallelComputation
+    def get[A](parallelComputation: Par[A]): A = ???
 
-    // Using strict arguments here would cause the whole left side of the evaluation tree to be built before
-    // proceeding to the right side.
-    // Supplying arguments as non-strict allows for fair parallel execution of both units.
-    // The downside here is that the API is implicit about when the computations are forked off the main thread.
-    def map2[A](a1: => Par[A], a2: => Par[A])(f: (Par[A], Par[A]) => A): Par[A] =
-      Par.unit(f(a1, a2))
-
+    // Map2 functions combine the results of two concurrent computations.
     // Having defined the `fork` function, we can use strict arguments here, leaving the parallelism up to the
     // user of the library.
-    def strictMap2[A](a1: Par[A], a2: Par[A])(f: (Par[A], Par[A]) => A): Par[A] =
-      Par.unit(f(a1, a2))
+    def strictMap2[A, B, C](a: Par[A], b: Par[B])(f: (A, B) => C): Par[C] =
+      (s: ExecutorService) => {
+        val atMost = 10 seconds
+        val af = a(s)
+        val bf = b(s)
+        UnitFuture(f(Await.result(af, atMost), Await.result(bf, atMost)))
+      }
 
     /**
      * Takes a computation and returns the description of its async evaluation.
-     * @param computation an evaluated A
+     * It's a *derived* combinator, meaning that it's expressed solely in terms of other combinators.
+     * Wraps the computation for concurrent evaluation by run().
+     * @param computation an unevaluated A
      * @tparam A computation result type
-     * @return a computation that is being evaluated in a seprate thread.
+     * @return a computation that might be evaluated in a separate thread
      */
-    def unit[A](computation: A): Par[A] = computation
+    def lazyUnit[A](computation: => A): Par[A] = fork(unit(computation))
+
+    /**
+     * Takes a computation and returns the description of its async evaluation.
+     * @param value an evaluated A
+     * @tparam A computation result type
+     * @return a computation that is being evaluated in a separate thread.
+     */
+    def unit[A](value: A): Par[A] = (s: ExecutorService) => UnitFuture(value)
+
+    /**
+     * Gives parallelism control to the programmer.
+     * Problems solved:
+     * - instantiating parallelism too strictly,
+     * - not being able to choose whether a task should be performed async.
+     * If `fork` was to run the provided computation immediately, its implementation would require knowledge about
+     * parallelization resources (e.g. have a global thread pool).
+     * This is unwanted here, we want to give more fine-grained control to the user.
+     * The assumed meaning of forking is to take an unresolved Par and "mark" it for concurrent evaluation.
+     * @param computation a computation to be concurrently evaluated.
+     * @tparam A computation result type
+     * @return a computation marked for concurrent evaluation
+     */
+    def fork[A](computation: => Par[A]): Par[A] =
+      executorService => {
+        val callable = new Callable[A] {
+          def call = Await.result(computation(executorService), 10 seconds)
+        }
+
+        val submit: concurrent.Future[A] = executorService.submit(callable)
+        val fut = submit
+        fut.asInstanceOf[Future[A]]
+      }
+
+    /**
+     * Extracts a value from a Par by actually performing the computation.
+     * @param computation the computation to perform
+    @tparam A computation result type
+     * @return result of the computation
+     */
+    def run[A](s: ExecutorService)(computation: Par[A]): Future[A] = computation(s)
+
+    // Having defined fork as such, Par does not need to know how to actually implement the parallelism.
+    // It's more of a description left for later interpretation.
+    // Par becomes more of a first-class program to be run instead of just a container for a value to be
+    // extracted.
+    // Run provides means of implementing the parallelism
+
+    def apply[A](f: => Future[A]): Par[A] =
+      (x: ExecutorService) => f
+
+    case class UnitFuture[A](get: A) extends Future[A] {
+      override def result(atMost: Duration)(implicit permit: CanAwait): A = get
+
+      override def onComplete[U](f: (Try[A]) => U)(implicit executor: ExecutionContext): Unit = f(Success(get))
+
+      override def isCompleted: Boolean = true
+
+      override def value: Option[Try[A]] = Some(Success(get))
+
+      override def ready(atMost: Duration)(implicit permit: CanAwait): this.type = this
+
+      //      Error:(145, 21) overriding method ready in trait Awaitable of type (atMost: scala.concurrent.duration.Duration)(implicit permit: scala.concurrent.CanAwait)UnitFuture.this.type;
+      //      method ready has incompatible type
+    }
   }
 
   parSum2(IndexedSeq(1, 2, 3, 5))
