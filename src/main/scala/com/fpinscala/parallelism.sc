@@ -31,7 +31,6 @@ object parallelism {
       val (l, r) = MyIdea.inHalf(inputs)
       parSum0(l) + parSum0(r)
     }
-
   def parSum2(inputs: IndexedSeq[Int]): Par[Int] = {
     println(inputs, inputs.size)
     if (inputs.size <= 1) {
@@ -85,21 +84,26 @@ object parallelism {
      */
     def run[A](s: ExecutorService)(computation: Par[A]): Future[A] = computation(s)
 
-    // Map2 functions combine the results of two concurrent computations.
-    // Having defined the `fork` function, we can use strict arguments here, leaving the parallelism up to the
-    // user of the library.
-    def map2[A, B, C](a: Par[A], b: Par[B])(f: (A, B) => C): Par[C] =
-      (s: ExecutorService) => {
-        val bf = b(s)
-        val af = a(s)
-        //        val atMost = 10 seconds
-        //        This representation does not honor timeouts internally.
-        //        UnitFuture(f(Await.result(af, atMost), Await.result(bf, atMost)))
-        Map2Future(af, bf)(f)
-      }
-
     def apply[A](f: => Future[A]): Par[A] =
       (x: ExecutorService) => f
+
+    def sort(parList: Par[List[Int]]): Par[List[Int]] =
+      map(parList)(_.sorted)
+
+    def map[A, B](pa: Par[A])(f: A => B): Par[B] =
+      map2(pa, unit())((a, _) => f(a))
+
+    def parMap[A, B](ps: List[A])(f: A => B): Par[List[B]] = fork {
+      val fbs: List[Par[B]] = ps.map(asyncF(f))
+      // Need something to collect the results...
+      sequence(fbs)
+    }
+
+    // Having defined fork as such, Par does not need to know how to actually implement the parallelism.
+    // It's more of a description left for later interpretation.
+    // Par becomes more of a first-class program to be run instead of just a container for a value to be
+    // extracted.
+    // Run provides means of implementing the parallelism
 
     def asyncF[A, B](f: A => B): A => Par[B] = (a) => lazyUnit(f(a))
 
@@ -112,20 +116,6 @@ object parallelism {
      * @return a computation that might be evaluated in a separate thread
      */
     def lazyUnit[A](computation: => A): Par[A] = fork(unit(computation))
-
-    // Having defined fork as such, Par does not need to know how to actually implement the parallelism.
-    // It's more of a description left for later interpretation.
-    // Par becomes more of a first-class program to be run instead of just a container for a value to be
-    // extracted.
-    // Run provides means of implementing the parallelism
-
-    /**
-     * Takes a computation and returns the description of its async evaluation.
-     * @param value an evaluated A
-     * @tparam A computation result type
-     * @return a computation that is being evaluated in a separate thread.
-     */
-    def unit[A](value: A): Par[A] = (s: ExecutorService) => UnitFuture(value)
 
     /**
      * Gives parallelism control to the programmer.
@@ -152,6 +142,34 @@ object parallelism {
           executorService.submit(callable).get
         }
       }
+
+    def sequence[A](ps: List[Par[A]]): Par[List[A]] = {
+      ps.foldRight(unit(List(): List[A]))((h, t) => map2(h, t)(_ :: _))
+    }
+
+    //    def sort[A](parList: Par[List[A]]): Par[List[A]] =
+    //      map2(parList, unit())((a, _) => a.sorted)
+
+    // Map2 functions combine the results of two concurrent computations.
+    // Having defined the `fork` function, we can use strict arguments here, leaving the parallelism up to the
+    // user of the library.
+    def map2[A, B, C](a: Par[A], b: Par[B])(f: (A, B) => C): Par[C] =
+      (s: ExecutorService) => {
+        val bf = b(s)
+        val af = a(s)
+        //        val atMost = 10 seconds
+        //        This representation does not honor timeouts internally.
+        //        UnitFuture(f(Await.result(af, atMost), Await.result(bf, atMost)))
+        Map2Future(af, bf)(f)
+      }
+
+    /**
+     * Takes a computation and returns the description of its async evaluation.
+     * @param value an evaluated A
+     * @tparam A computation result type
+     * @return a computation that is being evaluated in a separate thread.
+     */
+    def unit[A](value: A): Par[A] = (s: ExecutorService) => UnitFuture(value)
 
     case class UnitFuture[A](get: A) extends Future[A] {
       override def result(atMost: Duration)(implicit permit: CanAwait): A = get
@@ -181,6 +199,9 @@ object parallelism {
 
       override def value: Option[Try[C]] = Some(Success(compute(2 seconds)))
 
+      @scala.throws[Exception](classOf[Exception])
+      override def result(atMost: Duration)(implicit permit: CanAwait): C = compute(atMost)
+
       private def compute(atMost: Duration): C = cache match {
         case Some(c) => c
         case None => {
@@ -193,17 +214,14 @@ object parallelism {
         }
       }
 
-      @scala.throws[Exception](classOf[Exception])
-      override def result(atMost: Duration)(implicit permit: CanAwait): C = compute(atMost)
-
       @scala.throws[InterruptedException](classOf[InterruptedException])
       @scala.throws[TimeoutException](classOf[TimeoutException])
       override def ready(atMost: Duration)(implicit permit: CanAwait): this.type = this
     }
   }
-
   Par.get(pool)(Par.map2(Par.unit(12), Par.unit(7))(_ + _))
   Par.get(pool)(Par.asyncF[Int, Int](_ + 2)(3))
-  // This does not finish and blocks. Why?
-  // Par.get(pool)(parSum2(IndexedSeq(1, 2, 3, 5)))
+  // This does not finish and blocks or behaves strange in other ways. Why?
+  //  Par.get(Executors.newSingleThreadExecutor())(parSum2(IndexedSeq(1,2,3)))
+  Par.get(pool)(Par.parMap(List(1, 2, 3, 4, 5))(_ + 3))
 }
