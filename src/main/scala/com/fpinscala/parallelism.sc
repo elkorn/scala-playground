@@ -6,7 +6,7 @@ import scala.util.{Success, Try}
 
 object parallelism {
   type Par[A] = ExecutorService => Future[A]
-  private val pool: ExecutorService = Executors.newFixedThreadPool(2)
+  private val pool: ExecutorService = Executors.newCachedThreadPool()
 
   def nonParallelizableSum(ints: List[Int]): Int =
     ints.foldLeft(0)(_ + _)
@@ -108,6 +108,11 @@ object parallelism {
     // extracted.
     // Run provides means of implementing the parallelism
 
+    def filter[A](as: List[A])(f: A => Boolean): Par[List[A]] = {
+      val p = as.map(asyncF((a) => if (f(a)) List(a) else Nil))
+      map(sequence(p))(_.flatten)
+    }
+
     def asyncF[A, B](f: A => B): A => Par[B] = (a) => lazyUnit(f(a))
 
     /**
@@ -146,12 +151,12 @@ object parallelism {
         }
       }
 
+    //    def sort[A](parList: Par[List[A]]): Par[List[A]] =
+    //      map2(parList, unit())((a, _) => a.sorted)
+
     def sequence[A](ps: List[Par[A]]): Par[List[A]] = {
       ps.foldRight(unit(List(): List[A]))((h, t) => map2(h, t)(_ :: _))
     }
-
-    //    def sort[A](parList: Par[List[A]]): Par[List[A]] =
-    //      map2(parList, unit())((a, _) => a.sorted)
 
     // Map2 functions combine the results of two concurrent computations.
     // Having defined the `fork` function, we can use strict arguments here, leaving the parallelism up to the
@@ -173,11 +178,6 @@ object parallelism {
      * @return a computation that is being evaluated in a separate thread.
      */
     def unit[A](value: A): Par[A] = (s: ExecutorService) => UnitFuture(value)
-
-    def filter[A](as: List[A])(f: A => Boolean): Par[List[A]] = {
-      val p = as.map(asyncF((a) => if (f(a)) List(a) else Nil))
-      map(sequence(p))(_.flatten)
-    }
 
     def map[A, B](pa: Par[A])(f: A => B): Par[B] =
       map2(pa, unit())((a, _) => f(a))
@@ -229,12 +229,13 @@ object parallelism {
       @scala.throws[TimeoutException](classOf[TimeoutException])
       override def ready(atMost: Duration)(implicit permit: CanAwait): this.type = this
     }
+
   }
 
   Par.get(pool)(Par.map2(Par.unit(12), Par.unit(7))(_ + _))
   Par.get(pool)(Par.asyncF[Int, Int](_ + 2)(3))
   // This does not finish and blocks or behaves strange in other ways. Why?
-  //  Par.get(Executors.newSingleThreadExecutor())(parSum2(IndexedSeq(1,2,3)))
+  Par.get(pool)(parSum2(IndexedSeq(1, 2, 3)))
   Par.get(pool)(Par.parMap(List(1, 2, 3, 4, 5))(_ + 3))
   Par.get(pool)(Par.filter(List(1, 2, 3, 4, 5))(_ % 2 == 0))
 }
