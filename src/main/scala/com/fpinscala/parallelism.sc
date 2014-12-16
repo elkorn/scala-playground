@@ -1,13 +1,10 @@
 import java.util.concurrent.{Callable, ExecutorService, Executors}
-
 import scala.concurrent._
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
-
 object parallelism {
   type Par[A] = ExecutorService => Future[A]
   private val pool: ExecutorService = Executors.newCachedThreadPool()
-
   def nonParallelizableSum(ints: List[Int]): Int =
     ints.foldLeft(0)(_ + _)
 
@@ -33,7 +30,6 @@ object parallelism {
       val (l, r) = MyIdea.inHalf(inputs)
       parSum0(l) + parSum0(r)
     }
-
   def parSum2(inputs: IndexedSeq[Int]): Par[Int] = {
     println(inputs, inputs.size)
     if (inputs.size <= 1) {
@@ -50,7 +46,6 @@ object parallelism {
       Par.map2(Par.fork(parSum2(l)), Par.fork(parSum2(r)))(_ + _)
     }
   }
-
   object MyIdea {
     def divideAndConquer[A](z: A, op: (A, A) => A)(inputs: IndexedSeq[A]): A = {
       if (inputs.size <= 1)
@@ -68,7 +63,6 @@ object parallelism {
     def inHalf[A](inputs: IndexedSeq[A]): (IndexedSeq[A], IndexedSeq[A]) =
       inputs.splitAt(inputs.length / 2)
   }
-
   object Par {
 
     /**
@@ -229,14 +223,22 @@ object parallelism {
       @scala.throws[TimeoutException](classOf[TimeoutException])
       override def ready(atMost: Duration)(implicit permit: CanAwait): this.type = this
     }
-
   }
-
   Par.get(pool)(Par.map2(Par.unit(12), Par.unit(7))(_ + _))
   Par.get(pool)(Par.asyncF[Int, Int](_ + 2)(3))
-  // This does not finish and blocks or behaves strange in other ways. Why?
-  Par.get(pool)(parSum2(IndexedSeq(1, 2, 3)))
+  Par.get(Executors.newCachedThreadPool())(parSum2(IndexedSeq(1, 2, 3, 4)))
+  Par.get(Executors.newCachedThreadPool())(parSum2(IndexedSeq(1, 2, 3)))
   Par.get(pool)(Par.parMap(List(1, 2, 3, 4, 5))(_ + 3))
   Par.get(pool)(Par.filter(List(1, 2, 3, 4, 5))(_ % 2 == 0))
+  object Tests {
+    val timeout = 10 seconds
+    def equals[A](es: ExecutorService)(a1: Par[A], a2: Par[A]): Boolean = {
+      Await.result(Par.run(es)(a1), timeout) == Await.result(Par.run(es)(a2), timeout)
+    }
+
+    def mapShould
+  }
+
+  Tests.equals(Executors.newFixedThreadPool(2))(Par.map(Par.unit(1))(_ + 1), Par.unit(2))
 }
 
