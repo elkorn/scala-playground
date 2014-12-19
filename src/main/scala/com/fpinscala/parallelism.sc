@@ -1,13 +1,13 @@
 import java.util.concurrent.{Callable, ExecutorService, Executors}
+
 import scala.concurrent._
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
 object parallelism {
   type Par[A] = ExecutorService => Future[A]
-  private val pool: ExecutorService = Executors.newCachedThreadPool()
+  private val pool: ExecutorService = Executors.newScheduledThreadPool(6)
   def nonParallelizableSum(ints: List[Int]): Int =
     ints.foldLeft(0)(_ + _)
-
   //
   //  def parSum1(inputs: IndexedSeq[Int]): Int =
   //    if (inputs.size <= 1)
@@ -88,6 +88,20 @@ object parallelism {
     def sort(parList: Par[List[Int]]): Par[List[Int]] =
       map(parList)(_.sorted)
 
+    def filter[A](as: List[A])(f: A => Boolean): Par[List[A]] = {
+      val p = as.map(asyncF((a) => if (f(a)) List(a) else Nil))
+      map(sequence(p))(_.flatten)
+    }
+
+    def parTransform[A,B,C](ps: List[A])(mapF: A=>B)(reduceF:List[B]=>C): Par[C] = {
+      map(parMap(ps)(mapF))(reduceF)
+    }
+
+    // Having defined fork as such, Par does not need to know how to actually implement the parallelism.
+    // It's more of a description left for later interpretation.
+    // Par becomes more of a first-class program to be run instead of just a container for a value to be
+    // extracted.
+    // Run provides means of implementing the parallelism
     // Thanks to the top-level fork, this will create one async computation responsible
     // for spawning all the parallel computations from within map/asyncF and then wait for them to finish.
     def parMap[A, B](ps: List[A])(f: A => B): Par[List[B]] = fork {
@@ -96,18 +110,10 @@ object parallelism {
       sequence(fbs)
     }
 
-    // Having defined fork as such, Par does not need to know how to actually implement the parallelism.
-    // It's more of a description left for later interpretation.
-    // Par becomes more of a first-class program to be run instead of just a container for a value to be
-    // extracted.
-    // Run provides means of implementing the parallelism
-
-    def filter[A](as: List[A])(f: A => Boolean): Par[List[A]] = {
-      val p = as.map(asyncF((a) => if (f(a)) List(a) else Nil))
-      map(sequence(p))(_.flatten)
-    }
-
     def asyncF[A, B](f: A => B): A => Par[B] = (a) => lazyUnit(f(a))
+
+    //    def sort[A](parList: Par[List[A]]): Par[List[A]] =
+    //      map2(parList, unit())((a, _) => a.sorted)
 
     /**
      * Takes a computation and returns the description of its async evaluation.
@@ -145,12 +151,19 @@ object parallelism {
         }
       }
 
-    //    def sort[A](parList: Par[List[A]]): Par[List[A]] =
-    //      map2(parList, unit())((a, _) => a.sorted)
-
     def sequence[A](ps: List[Par[A]]): Par[List[A]] = {
       ps.foldRight(unit(List(): List[A]))((h, t) => map2(h, t)(_ :: _))
     }
+
+    //    def map3[A,B,C,D](a: Par[A],b:Par[B],c:Par[C])(f: (A,B,C)=>D): Par[D] =
+    //      map2[A,B,D](a,b) { (a,b) =>
+    //        map2[C,Unit,D](c, unit()) { (c,_) =>
+    //          f(a,b,c)
+    //        }
+    //      }
+
+    def map[A, B](pa: Par[A])(f: A => B): Par[B] =
+      map2(pa, unit())((a, _) => f(a))
 
     // Map2 functions combine the results of two concurrent computations.
     // Having defined the `fork` function, we can use strict arguments here, leaving the parallelism up to the
@@ -173,8 +186,9 @@ object parallelism {
      */
     def unit[A](value: A): Par[A] = (s: ExecutorService) => UnitFuture(value)
 
-    def map[A, B](pa: Par[A])(f: A => B): Par[B] =
-      map2(pa, unit())((a, _) => f(a))
+    def sumWords(ps: List[String]): Par[Int] = {
+      map(parMap(ps)(p => p.split(" ").length))(_.sum)
+    }
 
     case class UnitFuture[A](get: A) extends Future[A] {
       override def result(atMost: Duration)(implicit permit: CanAwait): A = get
@@ -223,22 +237,22 @@ object parallelism {
       @scala.throws[TimeoutException](classOf[TimeoutException])
       override def ready(atMost: Duration)(implicit permit: CanAwait): this.type = this
     }
+
   }
-  Par.get(pool)(Par.map2(Par.unit(12), Par.unit(7))(_ + _))
-  Par.get(pool)(Par.asyncF[Int, Int](_ + 2)(3))
-  Par.get(Executors.newCachedThreadPool())(parSum2(IndexedSeq(1, 2, 3, 4)))
-  Par.get(Executors.newCachedThreadPool())(parSum2(IndexedSeq(1, 2, 3)))
-  Par.get(pool)(Par.parMap(List(1, 2, 3, 4, 5))(_ + 3))
-  Par.get(pool)(Par.filter(List(1, 2, 3, 4, 5))(_ % 2 == 0))
+
+  //  Par.get(pool)(Par.map2(Par.unit(12), Par.unit(7))(_ + _))
+  //  Par.get(pool)(Par.asyncF[Int, Int](_ + 2)(3))
+  //  Par.get(pool)(parSum2(IndexedSeq(1, 2, 3, 4)))
+  //  Par.get(pool)(parSum2(IndexedSeq(1, 2, 3, 4, 5, 6)))
+  //  Par.get(pool)(Par.parMap(List(1, 2, 3, 4, 5))(_ + 3))
+  //  Par.get(pool)(Par.filter(List(1, 2, 3, 4, 5))(_ % 2 == 0))
+  Par.get(pool)(Par.sumWords(List("Lorem ipsum dolor sit amet, consectetur adipiscing elit,", "sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.", "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.")))
   object Tests {
     val timeout = 10 seconds
     def equals[A](es: ExecutorService)(a1: Par[A], a2: Par[A]): Boolean = {
       Await.result(Par.run(es)(a1), timeout) == Await.result(Par.run(es)(a2), timeout)
     }
-
-    def mapShould
   }
-
   Tests.equals(Executors.newFixedThreadPool(2))(Par.map(Par.unit(1))(_ + 1), Par.unit(2))
 }
 
