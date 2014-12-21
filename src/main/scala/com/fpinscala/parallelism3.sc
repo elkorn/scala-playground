@@ -33,10 +33,24 @@ object parallelism3 {
   def joinViaFlatMap[A](a: Par[Par[A]]): Par[A] =
     flatMap(a) { a => a}
 
+  def map2[A, B, C](a: Par[A], b: Par[B])(f: (A, B) => C): Par[C] =
+    es => {
+      flatMap(a) { a =>
+        flatMap(b) { b =>
+          Par.unit(f(a, b))
+        }
+      }(es)
+    }
+
   // generalChoice is actually...
   def flatMap[A, B](a: Par[A])(f: A => Par[B]): Par[B] =
     generalChoice(a)(f)
 
   Par.run(pool)(flatMapViaJoin(Par.unit(1))(x => Par.unit(x + 1))).get
   Par.run(pool)(joinViaFlatMap(Par.unit(Par.unit(1)))).get
+  Par.run(pool)(map2(Par.unit(1), Par.unit(2))(_ + _)).get
+
+  // The core idea of all parallelism exercises is to reduce a pure functional
+  // API to a minimal set of primitive functions.
+  // Good explanations and derived functions are required.
 }
