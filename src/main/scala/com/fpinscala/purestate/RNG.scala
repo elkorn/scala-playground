@@ -13,6 +13,11 @@ trait RNG {
     if (nextInt == Int.MinValue) rng2.nonNegativeInt
     else (nextInt.abs, rng2)
   }
+
+  def boolean(): (Boolean, RNG) = {
+    val (ir, rng2) = nonNegativeInt
+    (ir > Int.MaxValue / 2, rng2)
+  }
 }
 
 object RNG {
@@ -24,5 +29,7 @@ object RNG {
     }
   }
 
-  def nonNegativeInt(seed: Long = 1): (Int, RNG) = simple(seed).nonNegativeInt
+  def nonNegativeInt(rng: RNG): (Int, RNG) = rng.nonNegativeInt
+
+  def boolean(rng: RNG): (Boolean, RNG) = rng.boolean
 }

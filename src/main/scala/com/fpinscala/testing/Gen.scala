@@ -21,7 +21,7 @@ object Gen {
   }
 
   def boolean: Gen[Boolean] = {
-    Gen(Gen.choose(0, 2).sample.map(_ < 1))
+    Gen(State(RNG.boolean))
   }
 
   def listOfN[A](n: Int, g: Gen[A]): Gen[List[A]] = {
@@ -40,11 +40,9 @@ object Prop {
 
 trait Prop {
 
-  import com.fpinscala.testing.Prop.SuccessCount
-
-  def &&(other: Prop): Prop = new Prop {
-    def check: Boolean = this.check && other.check
-  }
-
-  def check: Either[(FailedCase, SuccessCount), SuccessCount]
+  //  def &&(other: Prop): Prop = new Prop {
+  //    def check: Boolean = this.check && other.check
+  //  }
+  //
+  //  def check: Either[(FailedCase, SuccessCount), SuccessCount]
 }
