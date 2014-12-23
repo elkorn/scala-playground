@@ -1,4 +1,4 @@
-
+import com.fpinscala.testing.Gen
 
 object run {
   val intList = Gen.listOf(Gen.choose(0, 100))

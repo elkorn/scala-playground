@@ -15,6 +15,18 @@ object Gen {
   def choose(start: Int, stopExclusive: Int): Gen[Int] = {
     Gen(State(RNG.nonNegativeInt).map(randInt => start + randInt % (stopExclusive - start)))
   }
+
+  def unit[A](a: => A): Gen[A] = {
+    Gen(State.unit(a))
+  }
+
+  def boolean: Gen[Boolean] = {
+    Gen(Gen.choose(0, 2).sample.map(_ < 1))
+  }
+
+  def listOfN[A](n: Int, g: Gen[A]): Gen[List[A]] = {
+    Gen(State.sequence(List.fill(n)(g.sample)))
+  }
 }
 
 case class Gen[A](sample: State[RNG, A])
@@ -28,7 +40,7 @@ object Prop {
 
 trait Prop {
 
-  import com.fpinscala.testing.Prop.{FailedCase, SuccessCount}
+  import com.fpinscala.testing.Prop.SuccessCount
 
   def &&(other: Prop): Prop = new Prop {
     def check: Boolean = this.check && other.check
