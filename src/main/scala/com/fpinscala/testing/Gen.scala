@@ -27,10 +27,17 @@ object Gen {
   def listOfN[A](n: Int, g: Gen[A]): Gen[List[A]] = {
     Gen(State.sequence(List.fill(n)(g.sample)))
   }
+
 }
 
-case class Gen[A](sample: State[RNG, A])
+case class Gen[A](sample: State[RNG, A]) {
+  def map[B](f: A => B): Gen[B] = {
+    Gen(sample.map(f))
+  }
 
+  def flatMap[B](f: A => Gen[B]): Gen[B] =
+    Gen(sample.flatMap(x => f(x).sample))
+}
 
 object Prop {
   type FailedCase = String
