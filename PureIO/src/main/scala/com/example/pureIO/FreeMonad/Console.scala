@@ -1,5 +1,7 @@
 package com.pureIO.FreeMonad
 
+import javax.swing.text.html.Option
+
 import com.pureIO.FreeMonad
 
 object Console {

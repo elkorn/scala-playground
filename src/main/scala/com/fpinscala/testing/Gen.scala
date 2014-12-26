@@ -19,18 +19,27 @@ case class Gen[+A](sample: State[RNG, A]) {
   }
 }
 
-object Prop {
-  type FailedCase = String
-  type SuccessCount = Int
-  // A computation that carries some state along == state action | state transition | statement.
-}
 
 object Gen {
   // Not specifying the size of the resulting list allows for greater flexibility.
   // Whatever function that runs the test has the freedom to choose the test size.
   //  def listOf[A](a: Gen[A]): Gen[List[A]]
 
-  //  def forAll[A](as: Gen[A])(predicate: A => Boolean): Prop
+  private def buildMsg[A](value: A, exception: Exception): Prop.FailedCase =
+    s"test case: $value\n" +
+      s"generated an exception: ${exception.getMessage}\n" +
+      s"stack trace:\n ${exception.getStackTrace.mkString("\n")}"
+
+  def forAll[A](as: Gen[A])(predicate: A => Boolean): Prop = Prop({
+    (n, rng) => randomStream(as)(rng).zip(Stream.from(0)).take(n).map {
+      case (a, i) => try {
+        if (predicate(a)) Passed
+        else Falsified(a.toString, i)
+      } catch {
+        case e: Exception => Falsified(buildMsg(a, e), i)
+      }
+    }.find(_.isFalsified).getOrElse(Passed)
+  })
 
   def choose(start: Int, stopExclusive: Int): Gen[Int] = {
     Gen(State(RNG.nonNegativeInt).map(randInt => start + randInt % (stopExclusive - start)))
@@ -56,14 +65,12 @@ object Gen {
 
     Gen(State(RNG.double).flatMap(v => if (v <= chooseG1) g1._1.sample else g2._1.sample))
   }
-}
 
 
-trait Prop {
+  private def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = f(z) match {
+    case Some((head, state)) => Stream.cons(head, unfold(state)(f))
+    case None => Stream.empty
+  }
 
-  //  def &&(other: Prop): Prop = new Prop {
-  //    def check: Boolean = this.check && other.check
-  //  }
-  //
-  //  def check: Either[(FailedCase, SuccessCount), SuccessCount]
+  def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] = unfold(rng)(rng => Some(g.sample.run(rng)))
 }

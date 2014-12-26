@@ -1,3 +1,5 @@
+package com.fpinscala.old
+
 import scala.collection.immutable.Stream.Empty
 
 object laziness2 {
