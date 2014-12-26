@@ -29,7 +29,12 @@ object RNG {
     }
   }
 
-  def nonNegativeInt(rng: RNG): (Int, RNG) = rng.nonNegativeInt
-
   def boolean(rng: RNG): (Boolean, RNG) = rng.boolean
+
+  def double(rng: RNG): (Double, RNG) = {
+    val (result, rng2) = nonNegativeInt(rng)
+    (result.toDouble / Int.MaxValue, rng2)
+  }
+
+  def nonNegativeInt(rng: RNG): (Int, RNG) = rng.nonNegativeInt
 }
