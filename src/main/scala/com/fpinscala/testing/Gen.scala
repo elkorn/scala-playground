@@ -19,6 +19,8 @@ case class Gen[+A](sample: State[RNG, A]) {
   }
 
   def unsized: SGen[A] = SGen(_ => this)
+
+  def listOf: SGen[List[A]] = Gen.listOf(this)
 }
 
 
@@ -33,7 +35,7 @@ object Gen {
       s"stack trace:\n ${exception.getStackTrace.mkString("\n")}"
 
   def forAll[A](as: Gen[A])(predicate: A => Boolean): Prop = Prop({
-    (n, rng) => randomStream(as)(rng).zip(Stream.from(0)).take(n).map {
+    (max, n, rng) => randomStream(as)(rng).zip(Stream.from(0)).take(n).map {
       case (a, i) => try {
         if (predicate(a)) Passed
         else Falsified(a.toString, i)
@@ -42,6 +44,14 @@ object Gen {
       }
     }.find(_.isFalsified).getOrElse(Passed)
   })
+
+//  def forAll[A](g: Int => Gen[A])(f: A=>Boolean): Prop = Prop {
+//    (max,n,rng) => {
+//      val casesPerSize = (n + (max-1)) / max
+//      val props: Stream[Prop] =
+//        Stream.from(0).take((n min max) + 1).map(i => forAll(g(i))(f))
+//    }
+//  }
 
   def choose(start: Int, stopExclusive: Int): Gen[Int] = {
     Gen(State(RNG.nonNegativeInt).map(randInt => start + randInt % (stopExclusive - start)))
@@ -67,6 +77,9 @@ object Gen {
 
     Gen(State(RNG.double).flatMap(v => if (v <= chooseG1) g1._1.sample else g2._1.sample))
   }
+
+  def listOf[A](g: Gen[A]): SGen[List[A]] =
+    SGen(n => Gen.listOfN(n, g))
 
 
   private def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = f(z) match {

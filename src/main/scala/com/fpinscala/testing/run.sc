@@ -15,4 +15,10 @@ object run {
       Gen.forAll(intList)(ns => ns.headOption == ns.reverse.lastOption)
 
   prop.run(100, simple)
+
+  val smallInt = Gen.choose(-10,10)
+  val maxProp = Prop.forAll(Gen.listOf(smallInt)) { ns =>
+    val max = ns
+
+  }
 }
