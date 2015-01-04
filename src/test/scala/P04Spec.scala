@@ -13,7 +13,7 @@ class P04Spec extends UnitSpec with Matchers {
   it should "count the number of elements in an empty list" in {
     val list = List()
     P04.length(list) should be(0)
-  }2
+  }
 
 }
 
