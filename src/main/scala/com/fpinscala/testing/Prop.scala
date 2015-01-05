@@ -9,6 +9,14 @@ object Prop {
   // How many test cases to run
   type TestCases = Int
   type MaxSize = Int
+
+  def run(p: Prop, maxSize: Int = 100, testCases: Int = 100, rng: RNG = RNG.simple(System.currentTimeMillis())): Unit =
+    p.run(maxSize, testCases, rng) match {
+      case Falsified(msg, n) =>
+        println(s"! Falsified after $n passed tests:\n $msg")
+      case Passed =>
+        println(s"+ OK, passed $testCases tests.")
+    }
 }
 
 case class Prop(run: (MaxSize, TestCases, RNG) => Result) {

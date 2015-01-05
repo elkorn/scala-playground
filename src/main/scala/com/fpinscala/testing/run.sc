@@ -1,6 +1,5 @@
 import com.fpinscala.purestate.RNG
-import com.fpinscala.testing.Gen
-
+import com.fpinscala.testing.{Prop, Gen}
 object run {
   val simple = RNG.simple(3)
   val (r1, rng1) = Gen.boolean.sample.run(simple)
@@ -8,17 +7,21 @@ object run {
   val (r3, rng3) = Gen.boolean.sample.run(rng2)
   Gen.unit(21).flatMap(x => Gen.unit[Int](x + 3)).sample.run(rng3)
   Gen.unit(21).listOfN(Gen.choose(1, 5)).sample.run(rng3)._1
-
   val intList = Gen.choose(0, 100).listOfN(10)
   val prop =
     Gen.forAll(intList)(ns => ns.reverse.reverse == ns) &&
       Gen.forAll(intList)(ns => ns.headOption == ns.reverse.lastOption)
-
-  prop.run(100, simple)
-
-  val smallInt = Gen.choose(-10,10)
-  val maxProp = Prop.forAll(Gen.listOf(smallInt)) { ns =>
-    val max = ns
-
+  prop.run(100, 10, simple)
+  val smallInt = Gen.choose(-10, 10)
+  val maxProp = Gen.forAll(Gen.listOf(smallInt)) { ns =>
+    val max = ns.max
+    !ns.exists(_ > max)
   }
+
+  Prop.run(maxProp)
+  val maxProp1 = Gen.forAll(Gen.listOf1(smallInt)){ ns =>
+    val max = ns.max
+    !ns.exists(_ > max)
+  }
+  Prop.run(maxProp1)
 }

@@ -45,13 +45,21 @@ object Gen {
     }.find(_.isFalsified).getOrElse(Passed)
   })
 
-//  def forAll[A](g: Int => Gen[A])(f: A=>Boolean): Prop = Prop {
-//    (max,n,rng) => {
-//      val casesPerSize = (n + (max-1)) / max
-//      val props: Stream[Prop] =
-//        Stream.from(0).take((n min max) + 1).map(i => forAll(g(i))(f))
-//    }
-//  }
+  def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop {
+    (max, n, rng) => {
+      val casesPerSize = (n + (max - 1)) / max
+      println(max,n,rng, casesPerSize, (n.min(max)) + 1);
+      val props: Stream[Prop] =
+        Stream.from(0).take((n.min(max)) + 1).map(i => forAll(g(i))(f))
+      val prop: Prop =
+        props.map(p => Prop {
+          (max, _, rng) => p.run(max, casesPerSize, rng)
+        }).toList.reduce(_ && _)
+      prop.run(max, n, rng)
+    }
+  }
+
+  def forAll[A](g: SGen[A])(f: A => Boolean): Prop = forAll(g(_))(f)
 
   def choose(start: Int, stopExclusive: Int): Gen[Int] = {
     Gen(State(RNG.nonNegativeInt).map(randInt => start + randInt % (stopExclusive - start)))
@@ -80,6 +88,9 @@ object Gen {
 
   def listOf[A](g: Gen[A]): SGen[List[A]] =
     SGen(n => Gen.listOfN(n, g))
+
+  def listOf1[A](g: Gen[A]): SGen[List[A]] =
+    SGen(n => g.listOf(n.max(1)))
 
 
   private def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = f(z) match {
