@@ -18,29 +18,29 @@ class LevenshteinDistanceSpec extends UnitSpec with Matchers {
     Prop.run(property) should be(Passed)
 
   it should "detect the distance for a simple case" in {
+    LevenshteinDistance.naiveCompute("kitten", "sitting") should be(3)
     LevenshteinDistance.compute("kitten", "sitting") should be(3)
-    LevenshteinDistance.memoizedCompute("kitten", "sitting") should be(3)
   }
 
   it should "be at least the difference of the sizes of the two strings" in {
     testProperty(Gen.forAll(stringPairs){p =>
-      LevenshteinDistance.memoizedCompute(p._1, p._2) >= Math.abs(p._1.length - p._2.length)
+      LevenshteinDistance.compute(p._1, p._2) >= Math.abs(p._1.length - p._2.length)
     })
   }
 
   it should "be at most the length of the longer string" in {
     testProperty(Gen.forAll(stringPairs) { p =>
-      LevenshteinDistance.memoizedCompute(p._1, p._2) <= p._1.length.max(p._2.length)
+      LevenshteinDistance.compute(p._1, p._2) <= p._1.length.max(p._2.length)
     })
   }
 
   it should "be zero if and only if the strings are equal" in {
     val allIdentical = Gen.forAll(identical(strings)) { p =>
-      LevenshteinDistance.memoizedCompute(p._1, p._2) == 0
+      LevenshteinDistance.compute(p._1, p._2) == 0
     }
 
     val possiblyIdentical = Gen.forAll(stringPairs) { p =>
-      val distance = LevenshteinDistance.memoizedCompute(p._1, p._2)
+      val distance = LevenshteinDistance.compute(p._1, p._2)
       if (p._1 == p._2) distance == 0
       else distance != 0
     }
