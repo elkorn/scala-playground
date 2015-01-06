@@ -9,5 +9,3 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.6" % "test"
 
 // Uncomment to use Akka
 //libraryDependencies += "com.typesafe.akka" % "akka-actor_2.11" % "2.3.3"
-
-libraryDependencies += "org.scalatest" % "scalatest_2.10" % "2.0" % "test"
