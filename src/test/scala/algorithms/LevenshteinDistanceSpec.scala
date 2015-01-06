@@ -10,5 +10,6 @@ import org.scalatest.Matchers
 class LevenshteinDistanceSpec extends UnitSpec with Matchers {
    it should "detect the distance for a simple case" in {
     LevenshteinDistance.compute("kitten", "sitting") should be (3)
+    LevenshteinDistance.memoizedCompute("kitten", "sitting") should be (3)
    }
 }
