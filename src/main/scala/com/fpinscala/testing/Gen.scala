@@ -21,6 +21,12 @@ case class Gen[+A](sample: State[RNG, A]) {
   def unsized: SGen[A] = SGen(_ => this)
 
   def listOf: SGen[List[A]] = Gen.listOf(this)
+
+  def zipWith[B](other: Gen[B]): Gen[(A,B)] = Gen(State(s => {
+    val (r1, rng1) = sample.run(s)
+    val (r2, rng2) = other.sample.run(rng1)
+    ((r1, r2), rng2)
+  }))
 }
 
 
@@ -91,6 +97,12 @@ object Gen {
 
   def listOf1[A](g: Gen[A]): SGen[List[A]] =
     SGen(n => g.listOf(n.max(1)))
+
+  def stringN(n: Int): Gen[String] =
+    listOfN(n, choose(0,127)).map(_.map(_.toChar).mkString)
+
+  def string(): SGen[String] =
+    listOf(choose(0,127)).map(_.map(_.toChar).mkString)
 
 
   private def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = f(z) match {

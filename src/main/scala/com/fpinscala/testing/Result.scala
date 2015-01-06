@@ -17,3 +17,7 @@ case object Passed extends Result {
 case class Falsified(failure: FailedCase, successes: SuccessCount) extends Result {
   override def isFalsified = true
 }
+
+case object Proved extends Result {
+  override def isFalsified: Boolean = false
+}

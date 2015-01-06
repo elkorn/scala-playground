@@ -1,7 +1,7 @@
 package com.fpinscala.testing
 
 import com.fpinscala.purestate.RNG
-import com.fpinscala.testing.Prop.{MaxSize, FailedCase, TestCases}
+import com.fpinscala.testing.Prop.{FailedCase, MaxSize, TestCases}
 
 object Prop {
   type FailedCase = String
@@ -10,13 +10,23 @@ object Prop {
   type TestCases = Int
   type MaxSize = Int
 
-  def run(p: Prop, maxSize: Int = 100, testCases: Int = 100, rng: RNG = RNG.simple(System.currentTimeMillis())): Unit =
-    p.run(maxSize, testCases, rng) match {
+  def run(p: Prop, maxSize: Int = 100, testCases: Int = 100, rng: RNG = RNG.simple(System.currentTimeMillis())): Result = {
+    lazy val result = p.run(maxSize, testCases, rng)
+    result match {
       case Falsified(msg, n) =>
         println(s"! Falsified after $n passed tests:\n $msg")
       case Passed =>
         println(s"+ OK, passed $testCases tests.")
+      case Proved =>
+        println(s"+ OK, proved property.")
     }
+
+    result
+  }
+
+  def check(p: => Boolean): Prop = Prop {
+    (_, _, _) => if (p) Proved else Falsified("()", 0)
+  }
 }
 
 case class Prop(run: (MaxSize, TestCases, RNG) => Result) {

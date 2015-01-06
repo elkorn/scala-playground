@@ -11,4 +11,10 @@ case class SGen[+A](forSize: Int => Gen[A]) {
 
   def listOf[A](g: Gen[A]): SGen[List[A]] =
     SGen(n => g.listOfN(n))
+
+  def zipWith[B](other: Gen[B]): SGen[(A, B)] =
+    SGen(n => forSize(n).zipWith(other))
+
+  def zipWith[B](other: SGen[B]): SGen[(A, B)] =
+    SGen(n => forSize(n).zipWith(other.forSize(n)))
 }
