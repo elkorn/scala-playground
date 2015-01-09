@@ -1,5 +1,6 @@
 import com.fpinscala.purestate.RNG
-import com.fpinscala.testing.{Prop, Gen}
+import com.fpinscala.testing._
+
 object run {
   val simple = RNG.simple(3)
   val (r1, rng1) = Gen.boolean.sample.run(simple)
@@ -19,9 +20,23 @@ object run {
   }
 
   Prop.run(maxProp)
-  val maxProp1 = Gen.forAll(Gen.listOf1(smallInt)){ ns =>
+  val maxProp1 = Gen.forAll(Gen.listOf1(smallInt)) { ns =>
     val max = ns.max
     !ns.exists(_ > max)
   }
   Prop.run(maxProp1)
+  val cogen = new Cogen[Int] {
+    def sample(a: Int, rng: RNG): RNG = {
+      val (res, rng2) = rng.nextInt
+      RNG.simple(a.toLong ^ res.toLong)
+    }
+  }
+
+  val takeDropRelationship = Gen.forAll(Gen.genCogen(cogen)(Gen.boolean)) { fn =>
+    Prop.run(Gen.forAll(intList) { ns =>
+      ns.takeWhile(fn).dropWhile(fn) == Nil
+    }) == Passed
+  }
+
+  Prop.run(takeDropRelationship, 100, 100)
 }

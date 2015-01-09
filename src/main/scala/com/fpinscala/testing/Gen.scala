@@ -29,6 +29,9 @@ case class Gen[+A](sample: State[RNG, A]) {
   }))
 }
 
+trait Cogen[-A] {
+  def sample(a: A, rng: RNG): RNG
+}
 
 object Gen {
   // Not specifying the size of the resulting list allows for greater flexibility.
@@ -111,4 +114,23 @@ object Gen {
   }
 
   def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] = unfold(rng)(rng => Some(g.sample.run(rng)))
+
+  // This function creates a generator of functions that take a string and use it to affect the generation of
+  // random values.
+  def genStringFn[A](g: Gen[A]): Gen[String => A] = Gen {
+    State(rng => {
+      val (res, rng2) = rng.nextInt
+      val f = (s: String) => g.sample.run(RNG.simple(res.toLong ^ s.hashCode.toLong))._1
+      (f, rng2)
+    })
+  }
+
+  // This function uses a co-generator to steer the output generator.
+  def genCogen[A, B](in: Cogen[A])(out: Gen[B]): Gen[A => B] = Gen {
+    State(rng => {
+      val (res, rng2) = rng.nextInt
+      val f = (a: A) => out.sample.run(in.sample(a, RNG.simple(res)))._1
+      (f, rng2)
+    })
+  }
 }

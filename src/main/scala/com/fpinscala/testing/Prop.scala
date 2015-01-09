@@ -54,4 +54,6 @@ case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
       case ok => ok
     }
   )
+
+
 }
