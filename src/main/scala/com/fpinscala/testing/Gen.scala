@@ -115,24 +115,27 @@ object Gen {
 
   private def genDecision(): Gen[TreeDecision.Value] = Gen.choose(0, 4).map(TreeDecision.apply)
 
-  def genIntTree(values: Gen[Int]): Gen[Tree[Int]] = Gen(State(recursiveIntTree(values)))
+  def genTree[A](values: Gen[A], maxDepth: Int = 100): Gen[Tree[A]] = Gen(State(recursiveTree(values, 0, maxDepth)))
 
-  private def recursiveIntTree(values: Gen[Int])(rng: RNG): (Tree[Int], RNG) = {
-    val (decision, rng2) = genDecision().sample.run(rng)
-    val (value, rng3) = values.sample.run(rng2)
+  private def recursiveTree[A](values: Gen[A], depth: Int, maxDepth: Int)(rng: RNG): (Tree[A], RNG) = {
+    val (value, rng2) = values.sample.run(rng)
+
+    if (depth == maxDepth - 1) return (Leaf(value), rng2)
+
+    val (decision, rng3) = genDecision().sample.run(rng2)
     decision match {
       case TreeDecision.None => (Leaf(value), rng3)
       case TreeDecision.Left => {
-        val (r1, rng4) = recursiveIntTree(values)(rng3)
+        val (r1, rng4) = recursiveTree(values, depth + 1, maxDepth)(rng3)
         (Branch(r1, Leaf(value)), rng4)
       }
       case TreeDecision.Right => {
-        val (r1, rng4) = recursiveIntTree(values)(rng3)
+        val (r1, rng4) = recursiveTree(values, depth + 1, maxDepth)(rng3)
         (Branch(Leaf(value), r1), rng4)
       }
       case TreeDecision.Both => {
-        val (left, rng4) = recursiveIntTree(values)(rng3)
-        val (right, rng5) = recursiveIntTree(values)(rng4)
+        val (left, rng4) = recursiveTree(values, depth + 1, maxDepth)(rng3)
+        val (right, rng5) = recursiveTree(values, depth + 1, maxDepth)(rng4)
         (Branch(left, right), rng5)
       }
     }
