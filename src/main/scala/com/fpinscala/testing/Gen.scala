@@ -1,5 +1,7 @@
 package com.fpinscala.testing
 
+import com.fpinscala.adt.Tree
+import com.fpinscala.adt.Tree.{Branch, Leaf}
 import com.fpinscala.purestate.{RNG, State}
 
 case class Gen[+A](sample: State[RNG, A]) {
@@ -22,7 +24,7 @@ case class Gen[+A](sample: State[RNG, A]) {
 
   def listOf: SGen[List[A]] = Gen.listOf(this)
 
-  def zipWith[B](other: Gen[B]): Gen[(A,B)] = Gen(State(s => {
+  def zipWith[B](other: Gen[B]): Gen[(A, B)] = Gen(State(s => {
     val (r1, rng1) = sample.run(s)
     val (r2, rng2) = other.sample.run(rng1)
     ((r1, r2), rng2)
@@ -57,7 +59,7 @@ object Gen {
   def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop {
     (max, n, rng) => {
       val casesPerSize = (n + (max - 1)) / max
-      println(max,n,rng, casesPerSize, (n.min(max)) + 1);
+      println(max, n, rng, casesPerSize, (n.min(max)) + 1);
       val props: Stream[Prop] =
         Stream.from(0).take((n.min(max)) + 1).map(i => forAll(g(i))(f))
       val prop: Prop =
@@ -102,11 +104,39 @@ object Gen {
     SGen(n => g.listOf(n.max(1)))
 
   def stringN(n: Int): Gen[String] =
-    listOfN(n, choose(0,127)).map(_.map(_.toChar).mkString)
+    listOfN(n, choose(0, 127)).map(_.map(_.toChar).mkString)
 
   def string(): SGen[String] =
-    listOf(choose(0,127)).map(_.map(_.toChar).mkString)
+    listOf(choose(0, 127)).map(_.map(_.toChar).mkString)
 
+  object TreeDecision extends Enumeration {
+    val None, Left, Right, Both = Value
+  }
+
+  private def genDecision(): Gen[TreeDecision.Value] = Gen.choose(0, 4).map(TreeDecision.apply)
+
+  def genIntTree(values: Gen[Int]): Gen[Tree[Int]] = Gen(State(recursiveIntTree(values)))
+
+  private def recursiveIntTree(values: Gen[Int])(rng: RNG): (Tree[Int], RNG) = {
+    val (decision, rng2) = genDecision().sample.run(rng)
+    val (value, rng3) = values.sample.run(rng2)
+    decision match {
+      case TreeDecision.None => (Leaf(value), rng3)
+      case TreeDecision.Left => {
+        val (r1, rng4) = recursiveIntTree(values)(rng3)
+        (Branch(r1, Leaf(value)), rng4)
+      }
+      case TreeDecision.Right => {
+        val (r1, rng4) = recursiveIntTree(values)(rng3)
+        (Branch(Leaf(value), r1), rng4)
+      }
+      case TreeDecision.Both => {
+        val (left, rng4) = recursiveIntTree(values)(rng3)
+        val (right, rng5) = recursiveIntTree(values)(rng4)
+        (Branch(left, right), rng5)
+      }
+    }
+  }
 
   private def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = f(z) match {
     case Some((head, state)) => Stream.cons(head, unfold(state)(f))
