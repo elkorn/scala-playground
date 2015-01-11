@@ -103,11 +103,17 @@ object Gen {
   def listOf1[A](g: Gen[A]): SGen[List[A]] =
     SGen(n => g.listOf(n.max(1)))
 
+  def char(): Gen[Char] =
+    Gen.choose(0, 127).map(_.toChar)
+
+  def charN(n: Int): Gen[List[Char]] =
+    listOfN(n, char())
+
   def stringN(n: Int): Gen[String] =
-    listOfN(n, choose(0, 127)).map(_.map(_.toChar).mkString)
+    charN(n).map(_.mkString)
 
   def string(): SGen[String] =
-    listOf(choose(0, 127)).map(_.map(_.toChar).mkString)
+    listOf(char()).map(_.mkString)
 
   object TreeDecision extends Enumeration {
     val None, Left, Right, Both = Value

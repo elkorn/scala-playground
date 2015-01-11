@@ -97,4 +97,12 @@ class ParsingSpec extends UnitSpec with Matchers with PropertyTesting {
     })
   }
 
+  "contextual" should "discover the number of characters that should follow a number" in {
+    testProperty(Gen.forAll(Gen.choose(1, 100).zipWith(Gen.char())) {
+      case (n, ch) => {
+        val correctPattern = s"$n${List.fill(n)(ch).mkString}"
+        Parsers.contextual(Parsers.char(ch)).run(correctPattern) == Right(correctPattern)
+      }
+    })
+  }
 }

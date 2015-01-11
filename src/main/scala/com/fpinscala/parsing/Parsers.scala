@@ -3,6 +3,7 @@ package com.fpinscala.parsing
 import com.fpinscala.testing.{Gen, Prop}
 
 import scala.annotation.tailrec
+import scala.util.matching.Regex
 
 /**
  * Created by elkorn on 1/10/15.
@@ -13,11 +14,7 @@ trait Parsers[ParseError, Parser[+ _]] {
 
   def orString(s1: String, s2: String): Parser[String] = or(string(s1), string(s2))
 
-  def or[A](p1: Parser[A], p2: Parser[A]): Parser[A] = ???
-
-  // Does it have to be implicit for promoting String instances to Parser instances?
-  // The compiler does not seem to complain about it not being implicit...
-  implicit def string(s: String): Parser[String] = ???
+  def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A] = ???
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
@@ -99,6 +96,10 @@ trait Parsers[ParseError, Parser[+ _]] {
    */
   def succeed[A](a: A): Parser[A] = string("") map (_ => a)
 
+  // Does it have to be implicit for promoting String instances to Parser instances?
+  // The compiler does not seem to complain about it not being implicit...
+  implicit def string(s: String): Parser[String] = ???
+
   /**
    * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
    * argument - which would lead to non-termination.
@@ -113,6 +114,15 @@ trait Parsers[ParseError, Parser[+ _]] {
    * argument - which would lead to non-termination.
    */
   def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] = ???
+
+  implicit def flatMap[A, B](a: Parser[A])(f: A => Parser[B]): Parser[B] = ???
+
+  implicit def regex(r: Regex): Parser[String] = ???
+
+  /**
+   * Parse expressions like "0", "1a", "2bb", "3ooo" and so on.
+   */
+  def contextual(p: Parser[Char]) = flatMap(map(regex("[0-9]+".r))(_.toInt))(listOfN(_, p))
 
   // `pair` compiles to String - this is most likely due to how `asStringParser` is defined.
   //  def map2x[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
@@ -130,6 +140,8 @@ trait Parsers[ParseError, Parser[+ _]] {
     def or[B >: A](p2: => Parser[B]): Parser[B] = self.or(p, p2)
 
     def map[B](f: A => B): Parser[B] = self.map(p)(f)
+
+    def flatMap[B](f: A => Parser[B]): Parser[B] = self.flatMap(p)(f)
 
     def many: Parser[List[A]] = self.many(p)
 
