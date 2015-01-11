@@ -13,6 +13,12 @@ trait Parsers[ParseError, Parser[+ _]] {
 
   def orString(s1: String, s2: String): Parser[String] = or(string(s1), string(s2))
 
+  def or[A](p1: Parser[A], p2: Parser[A]): Parser[A] = ???
+
+  // Does it have to be implicit for promoting String instances to Parser instances?
+  // The compiler does not seem to complain about it not being implicit...
+  implicit def string(s: String): Parser[String] = ???
+
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
   implicit def run[A](p: Parser[A])(input: String): Either[ParseError, A] = ???
@@ -44,14 +50,14 @@ trait Parsers[ParseError, Parser[+ _]] {
    * If `p` fails, succeed with an empty list.
    */
   implicit def many[A](p: Parser[A]): Parser[List[A]] =
-    or(map2(p, many(p))(_ :: _), succeed(Nil: List[A]))
+    or(map2(p, nonStrict(many(p)))(_ :: _), succeed(Nil: List[A]))
 
   /**
    * Recognizes one or more instances of values parsed by `p`.
    * Conceptually this is just `p` followed by `many(p)` (as in string concatenation).
    */
   def many1[A](p: Parser[A]): Parser[List[A]] =
-    map2(p, many(p))(_ :: _)
+    map2(p, nonStrict(many(p)))(_ :: _)
 
   /**
    * Book version.
@@ -65,22 +71,6 @@ trait Parsers[ParseError, Parser[+ _]] {
    */
   def listOfN1[A](n: Int, p: Parser[A]): Parser[List[A]] =
     or(map(p)((a) => List.fill(n)(a)), succeed(Nil: List[A]))
-
-  def or[A](p1: Parser[A], p2: Parser[A]): Parser[A] = ???
-
-  implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] = ???
-
-  /**
-   * This parser always succeeds with the value of `a`, regardless of the input string.
-   * string("") will always successfully be parsed - even if the input is empty.
-   * @param a some value.
-   * @return a
-   */
-  def succeed[A](a: A): Parser[A] = string("") map (_ => a)
-
-  // Does it have to be implicit for promoting String instances to Parser instances?
-  // The compiler does not seem to complain about it not being implicit...
-  implicit def string(s: String): Parser[String] = ???
 
   /**
    * Optimized variant.
@@ -101,18 +91,38 @@ trait Parsers[ParseError, Parser[+ _]] {
     work(n, p, succeed(Nil: List[A]))
   }
 
+  /**
+   * This parser always succeeds with the value of `a`, regardless of the input string.
+   * string("") will always successfully be parsed - even if the input is empty.
+   * @param a some value.
+   * @return a
+   */
+  def succeed[A](a: A): Parser[A] = string("") map (_ => a)
+
+  /**
+   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
+   * argument - which would lead to non-termination.
+   */
   def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
     map(zip(pa, pb))(pair => f(pair._1, pair._2))
+
+  implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] = ???
+
+  /**
+   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
+   * argument - which would lead to non-termination.
+   */
+  def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] = ???
 
   // `pair` compiles to String - this is most likely due to how `asStringParser` is defined.
   //  def map2x[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
   //    map(pa.zip(pb))(pair => f(pair._1, pair._2))
 
-  def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] = ???
-
   implicit def operators[A](p: Parser[A]) = ParserOps[A](p)
 
   implicit def asStringParser[A](a: A)(implicit f: A => Parser[String]): ParserOps[String] = ParserOps(f(a))
+
+  private def nonStrict[A](a: => Parser[A]): Parser[A] = a
 
   case class ParserOps[A](p: Parser[A]) {
     def |[B >: A](p2: Parser[B]): Parser[B] = self.or(p, p2)
