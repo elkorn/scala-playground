@@ -80,4 +80,21 @@ class ParsingSpec extends UnitSpec with Matchers with PropertyTesting {
       (slice(str).many).run(str) == Right(str)
     })
   }
+
+  "listOfN1" should "be equivalent to the book implementation" in {
+    val n = 5
+    testProperty(Gen.forAll(Gen.string()) { str =>
+      val char: Any = Parsers.char(str.charAt(0))
+      Parsers.Laws.equal(Parsers.listOfN(n, char), Parsers.listOfN1(n, char))(str)
+    })
+  }
+
+  "listOfN2" should "be equivalent to the book implementation" in {
+    val n = 5
+    testProperty(Gen.forAll(Gen.string()) { str =>
+      val char: Any = Parsers.char(str.charAt(0))
+      Parsers.Laws.equal(Parsers.listOfN(n, char), Parsers.listOfN2(n, char))(str)
+    })
+  }
+
 }

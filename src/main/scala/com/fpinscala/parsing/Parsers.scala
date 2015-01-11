@@ -2,6 +2,8 @@ package com.fpinscala.parsing
 
 import com.fpinscala.testing.{Gen, Prop}
 
+import scala.annotation.tailrec
+
 /**
  * Created by elkorn on 1/10/15.
  */
@@ -10,12 +12,6 @@ trait Parsers[ParseError, Parser[+ _]] {
   self =>
 
   def orString(s1: String, s2: String): Parser[String] = or(string(s1), string(s2))
-
-  def or[A](p1: Parser[A], p2: Parser[A]): Parser[A] = ???
-
-  // Does it have to be implicit for promoting String instances to Parser instances?
-  // The compiler does not seem to complain about it not being implicit...
-  implicit def string(s: String): Parser[String] = ???
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
@@ -57,16 +53,22 @@ trait Parsers[ParseError, Parser[+ _]] {
   def many1[A](p: Parser[A]): Parser[List[A]] =
     map2(p, many(p))(_ :: _)
 
-  def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] = ???
+  /**
+   * Book version.
+   */
+  def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] =
+    if (n <= 0) succeed(Nil: List[A])
+    else map2(p, listOfN(n - 1, p))(_ :: _)
+
+  /**
+   * My basic idea.
+   */
+  def listOfN1[A](n: Int, p: Parser[A]): Parser[List[A]] =
+    or(map(p)((a) => List.fill(n)(a)), succeed(Nil: List[A]))
+
+  def or[A](p1: Parser[A], p2: Parser[A]): Parser[A] = ???
 
   implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] = ???
-
-  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
-    map(zip(pa, pb))(pair => f(pair._1, pair._2))
-
-  // `pair` compiles to String - this is most likely due to how `asStringParser` is defined.
-  //  def map2x[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
-  //    map(pa.zip(pb))(pair => f(pair._1, pair._2))
 
   /**
    * This parser always succeeds with the value of `a`, regardless of the input string.
@@ -75,6 +77,38 @@ trait Parsers[ParseError, Parser[+ _]] {
    * @return a
    */
   def succeed[A](a: A): Parser[A] = string("") map (_ => a)
+
+  // Does it have to be implicit for promoting String instances to Parser instances?
+  // The compiler does not seem to complain about it not being implicit...
+  implicit def string(s: String): Parser[String] = ???
+
+  /**
+   * Optimized variant.
+   * The key observation I had while creating this is that the accumulator
+   * parser's list is being filled while going down the recursion stack.
+   * It prepares all the arguments while going down, and brings the
+   * last instance of the accumulator (completely filled) back up the stack.
+   *
+   * My mind does not cope well with recursion...
+   */
+  def listOfN2[A](n: Int, p: Parser[A]): Parser[List[A]] = {
+    @tailrec
+    def work(n: Int, p: Parser[A], acc: Parser[List[A]]): Parser[List[A]] = {
+      if (n <= 0) acc
+      else work(n - 1, p, map2(p, acc)(_ :: _))
+    }
+
+    work(n, p, succeed(Nil: List[A]))
+  }
+
+  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
+    map(zip(pa, pb))(pair => f(pair._1, pair._2))
+
+  // `pair` compiles to String - this is most likely due to how `asStringParser` is defined.
+  //  def map2x[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
+  //    map(pa.zip(pb))(pair => f(pair._1, pair._2))
+
+  def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] = ???
 
   implicit def operators[A](p: Parser[A]) = ParserOps[A](p)
 
@@ -102,7 +136,7 @@ trait Parsers[ParseError, Parser[+ _]] {
     def mapIsStructurePreserving[A](p: Parser[A])(in: Gen[String]): Prop =
       equal(p, p.map(a => a))(in)
 
-    private def equal[A](p1: Parser[A], p2: Parser[A])(in: Gen[String]): Prop =
+    def equal[A](p1: Parser[A], p2: Parser[A])(in: Gen[String]): Prop =
       Gen.forAll(in)(s => run(p1)(s) == run(p2)(s))
 
     def succeedAlwaysSucceeds[A](in: Gen[String], out: A): Prop =
