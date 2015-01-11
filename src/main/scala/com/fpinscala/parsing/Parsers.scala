@@ -22,11 +22,19 @@ trait Parsers[ParseError, Parser[+ _]] {
 
   def countChar(c: Char): Parser[Int] = map(many(char(c)))(_.size)
 
-  def char(c: Char): Parser[Char] = ???
+  def char(c: Char): Parser[Char] = string(c.toString) map (_.charAt(0))
 
   implicit def many[A](a: Parser[A]): Parser[List[A]] = ???
 
   implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] = ???
+
+  /**
+   * This parser always succeeds with the value of `a`, regardless of the input string.
+   * string("") will always successfully be parsed - even if the input is empty.
+   * @param a some value.
+   * @return a
+   */
+  def succeed[A](a: A): Parser[A] = string("") map (_ => a)
 
   implicit def operators[A](p: Parser[A]) = ParserOps[A](p)
 
@@ -50,5 +58,11 @@ trait Parsers[ParseError, Parser[+ _]] {
 
     private def equal[A](p1: Parser[A], p2: Parser[A])(in: Gen[String]): Prop =
       Gen.forAll(in)(s => run(p1)(s) == run(p2)(s))
+
+    def succeedAlwaysSucceeds[A](in: Gen[String], out: A): Prop =
+      Gen.forAll(in) { s =>
+        succeed(out).run(s) == Right(out)
+      }
   }
+
 }
