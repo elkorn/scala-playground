@@ -16,10 +16,6 @@ trait Parsers[ParseError, Parser[+ _]] {
 
   def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A] = ???
 
-  // Does it have to be implicit for promoting String instances to Parser instances?
-  // The compiler does not seem to complain about it not being implicit...
-  implicit def string(s: String): Parser[String] = ???
-
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
   implicit def run[A](p: Parser[A])(input: String): Either[ParseError, A] = ???
@@ -41,17 +37,11 @@ trait Parsers[ParseError, Parser[+ _]] {
   def char(c: Char): Parser[Char] = string(c.toString) map (_.charAt(0))
 
   /**
-   * Runs a parser purely to see what portion of the input string it examines.
-   * @return The portion of the input string examined by the parser if successful.
-   */
-  def slice[A](p: Parser[A]): Parser[String] = ???
-
-  /**
    * Try parsing forward as long as `p` does not fail, concatenating the results along the way.
    * If `p` fails, succeed with an empty list.
    */
   implicit def many[A](p: Parser[A]): Parser[List[A]] =
-    or(map2(p, nonStrict(many(p)))(_ :: _), succeed(Nil: List[A]))
+    or(many1(p), succeed(Nil: List[A]))
 
   /**
    * Recognizes one or more instances of values parsed by `p`.
@@ -59,6 +49,31 @@ trait Parsers[ParseError, Parser[+ _]] {
    */
   def many1[A](p: Parser[A]): Parser[List[A]] =
     map2(p, nonStrict(many(p)))(_ :: _)
+
+  def skipRight[A](pa: => Parser[A], p0: => Parser[Any]): Parser[A] =
+    map2(pa, slice(p0))((a, _) => a)
+
+  /**
+   * Runs a parser purely to see what portion of the input string it examines.
+   * @return The portion of the input string examined by the parser if successful.
+   */
+  def slice[A](p: Parser[A]): Parser[String] = ???
+
+  /**
+   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
+   * argument - which would lead to non-termination.
+   */
+  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
+    flatMap(pa)(a => map(pb)(b => f(a, b)))
+
+  def skipLeft[B](p0: Parser[Any], pb: => Parser[B]): Parser[B] =
+    map2(slice(p0), pb)((_, b) => b)
+
+  def separated[A](p: Parser[A], separators: Parser[Any]): Parser[List[A]] =
+    or(separated1(p, separators), succeed(Nil: List[A]))
+
+  def separated1[A](p: Parser[A], separators: Parser[Any]): Parser[List[A]] =
+    map2(p, many(skipLeft(separators, p)))(_ :: _)
 
   /**
    * Book version.
@@ -96,13 +111,6 @@ trait Parsers[ParseError, Parser[+ _]] {
    * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
    * argument - which would lead to non-termination.
    */
-  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
-    flatMap(pa)(a => map(pb)(b => f(a, b)))
-
-  /**
-   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
-   * argument - which would lead to non-termination.
-   */
   def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] =
     flatMap(pa)(a => map(pb)(b => (a, b)))
 
@@ -116,6 +124,10 @@ trait Parsers[ParseError, Parser[+ _]] {
    * @return a
    */
   def succeed[A](a: A): Parser[A] = string("") map (_ => a)
+
+  // Does it have to be implicit for promoting String instances to Parser instances?
+  // The compiler does not seem to complain about it not being implicit...
+  implicit def string(s: String): Parser[String] = ???
 
   implicit def flatMap[A, B](a: Parser[A])(f: A => Parser[B]): Parser[B] = ???
 
