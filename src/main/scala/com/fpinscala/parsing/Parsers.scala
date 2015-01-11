@@ -16,6 +16,10 @@ trait Parsers[ParseError, Parser[+ _]] {
 
   def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A] = ???
 
+  // Does it have to be implicit for promoting String instances to Parser instances?
+  // The compiler does not seem to complain about it not being implicit...
+  implicit def string(s: String): Parser[String] = ???
+
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
   implicit def run[A](p: Parser[A])(input: String): Either[ParseError, A] = ???
@@ -89,31 +93,29 @@ trait Parsers[ParseError, Parser[+ _]] {
   }
 
   /**
+   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
+   * argument - which would lead to non-termination.
+   */
+  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
+    flatMap(pa)(a => map(pb)(b => f(a, b)))
+
+  /**
+   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
+   * argument - which would lead to non-termination.
+   */
+  def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] =
+    flatMap(pa)(a => map(pb)(b => (a, b)))
+
+  implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] =
+    flatMap(a)(a => succeed(f(a)))
+
+  /**
    * This parser always succeeds with the value of `a`, regardless of the input string.
    * string("") will always successfully be parsed - even if the input is empty.
    * @param a some value.
    * @return a
    */
   def succeed[A](a: A): Parser[A] = string("") map (_ => a)
-
-  // Does it have to be implicit for promoting String instances to Parser instances?
-  // The compiler does not seem to complain about it not being implicit...
-  implicit def string(s: String): Parser[String] = ???
-
-  /**
-   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
-   * argument - which would lead to non-termination.
-   */
-  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
-    map(zip(pa, pb))(pair => f(pair._1, pair._2))
-
-  implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] = ???
-
-  /**
-   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
-   * argument - which would lead to non-termination.
-   */
-  def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] = ???
 
   implicit def flatMap[A, B](a: Parser[A])(f: A => Parser[B]): Parser[B] = ???
 
