@@ -68,4 +68,16 @@ class ParsingSpec extends UnitSpec with Matchers with PropertyTesting {
     Parsers.countChar("a").run("") should be(Right(0))
     Parsers.countChar("a").run("b") should be(Right(0))
   }
+
+  "slice combinator" should "show the examined part of the input string" in {
+    val P: Parsers
+    import P._
+
+    (slice(('a' | 'b').many)).run("aaba") should be(Right("aaba"))
+
+
+    testProperty(Gen.forAll(Gen.string()) { str =>
+      (slice(str).many).run(str) == Right(str)
+    })
+  }
 }
