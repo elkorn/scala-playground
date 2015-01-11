@@ -1,5 +1,7 @@
 package com.fpinscala.parsing
 
+import com.fpinscala.testing.{Gen, Prop}
+
 /**
  * Created by elkorn on 1/10/15.
  */
@@ -16,15 +18,15 @@ trait Parsers[ParseError, Parser[+ _]] {
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
-  def run[A](p: Parser[A])(input: String): Either[ParserError, A] = ???
+  implicit def run[A](p: Parser[A])(input: String): Either[ParseError, A] = ???
 
   def countChar(c: Char): Parser[Int] = map(many(char(c)))(_.size)
 
   def char(c: Char): Parser[Char] = ???
 
-  def many[A](a: Parser[A]): Parser[List[A]] = ???
+  implicit def many[A](a: Parser[A]): Parser[List[A]] = ???
 
-  def map[A, B](a: Parser[A])(f: A => B): Parser[B] = ???
+  implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] = ???
 
   implicit def operators[A](p: Parser[A]) = ParserOps[A](p)
 
@@ -34,13 +36,19 @@ trait Parsers[ParseError, Parser[+ _]] {
     def |[B >: A](p2: Parser[B]): Parser[B] = self.or(p, p2)
 
     def or[B >: A](p2: => Parser[B]): Parser[B] = self.or(p, p2)
+
+    def map[B](f: A => B): Parser[B] = self.map(p)(f)
+
+    def many: Parser[List[A]] = self.many(p)
+
+    def run(s: String): Either[ParseError, A] = self.run(p)(s)
   }
 
-  //  object Laws {
-  //    def mapIsStructurePreserving[A](p: Parser[A])(in: Gen[String]): Prop =
-  //      equal(p, Parsers.map(p)(a => a))(in)
-  //
-  //    private def equal[A](p1: Parser[A], p2: Parser[A])(in: Gen[String]): Prop =
-  //      Gen.forAll(in)(s => run(p1)(s) == run(p2)(s))
-  //  }
+  object Laws {
+    def mapIsStructurePreserving[A](p: Parser[A])(in: Gen[String]): Prop =
+      equal(p, p.map(a => a))(in)
+
+    private def equal[A](p1: Parser[A], p2: Parser[A])(in: Gen[String]): Prop =
+      Gen.forAll(in)(s => run(p1)(s) == run(p2)(s))
+  }
 }
