@@ -1,5 +1,7 @@
 package com.fpinscala.parsing
 
+import java.util.regex.Pattern
+
 import com.fpinscala.testing.{Gen, Prop}
 
 import scala.annotation.tailrec
@@ -15,6 +17,20 @@ trait Parsers[ParseError, Parser[+ _]] {
   def orString(s1: String, s2: String): Parser[String] = or(string(s1), string(s2))
 
   def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A] = ???
+
+  // Does it have to be implicit for promoting String instances to Parser instances?
+  // The compiler does not seem to complain about it not being implicit...
+  implicit def string(s: String): Parser[String] = ???
+
+  def orr[A](ps: Parser[A]*): Parser[A] = {
+    @tailrec
+    def go(acc: Parser[A], ps: Seq[Parser[A]]): Parser[A] = ps match {
+      case Nil => acc
+      case p1 :: rest => go(or(acc, p1), rest)
+    }
+
+    go(ps.head, ps.tail)
+  }
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
@@ -49,22 +65,6 @@ trait Parsers[ParseError, Parser[+ _]] {
    */
   def many1[A](p: Parser[A]): Parser[List[A]] =
     map2(p, nonStrict(many(p)))(_ :: _)
-
-  def skipRight[A](pa: => Parser[A], p0: => Parser[Any]): Parser[A] =
-    map2(pa, slice(p0))((a, _) => a)
-
-  /**
-   * Runs a parser purely to see what portion of the input string it examines.
-   * @return The portion of the input string examined by the parser if successful.
-   */
-  def slice[A](p: Parser[A]): Parser[String] = ???
-
-  /**
-   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
-   * argument - which would lead to non-termination.
-   */
-  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
-    flatMap(pa)(a => map(pb)(b => f(a, b)))
 
   def skipLeft[B](p0: Parser[Any], pb: => Parser[B]): Parser[B] =
     map2(slice(p0), pb)((_, b) => b)
@@ -114,6 +114,27 @@ trait Parsers[ParseError, Parser[+ _]] {
   def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] =
     flatMap(pa)(a => map(pb)(b => (a, b)))
 
+  def as[A, B](a: Parser[A])(b: B): Parser[B] =
+    map(slice(a))(_ => b)
+
+  def root[A](p: Parser[A]): Parser[A] = skipRight(p, eof)
+
+  def skipRight[A](pa: => Parser[A], p0: => Parser[Any]): Parser[A] =
+    map2(pa, slice(p0))((a, _) => a)
+
+  /**
+   * Runs a parser purely to see what portion of the input string it examines.
+   * @return The portion of the input string examined by the parser if successful.
+   */
+  def slice[A](p: Parser[A]): Parser[String] = ???
+
+  /**
+   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
+   * argument - which would lead to non-termination.
+   */
+  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
+    flatMap(pa)(a => map(pb)(b => f(a, b)))
+
   implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] =
     flatMap(a)(a => succeed(f(a)))
 
@@ -125,11 +146,9 @@ trait Parsers[ParseError, Parser[+ _]] {
    */
   def succeed[A](a: A): Parser[A] = string("") map (_ => a)
 
-  // Does it have to be implicit for promoting String instances to Parser instances?
-  // The compiler does not seem to complain about it not being implicit...
-  implicit def string(s: String): Parser[String] = ???
-
   implicit def flatMap[A, B](a: Parser[A])(f: A => Parser[B]): Parser[B] = ???
+
+  def eof: Parser[String] = regex("\\z".r)
 
   implicit def regex(r: Regex): Parser[String] = ???
 
@@ -138,6 +157,13 @@ trait Parsers[ParseError, Parser[+ _]] {
    */
   def contextual(p: Parser[Char]) = flatMap(map(regex("[0-9]+".r))(_.toInt))(listOfN(_, p))
 
+  def whitespace: Parser[String] = regex("\\s*".r)
+
+  def double: Parser[Double] = map(regex("[-+]?([0-9]*\\.)?[0-9]+([eE][-+]?[0-9]+)?".r))(_.toDouble)
+
+  def token[A](p: Parser[A]): Parser[A] =
+    skipRight(p, whitespace)
+
   // `pair` compiles to String - this is most likely due to how `asStringParser` is defined.
   //  def map2x[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
   //    map(pa.zip(pb))(pair => f(pair._1, pair._2))
@@ -145,6 +171,12 @@ trait Parsers[ParseError, Parser[+ _]] {
   implicit def operators[A](p: Parser[A]) = ParserOps[A](p)
 
   implicit def asStringParser[A](a: A)(implicit f: A => Parser[String]): ParserOps[String] = ParserOps(f(a))
+
+  def through(s: String): Parser[String] = regex((".*?" + Pattern.quote(s)).r)
+
+  def quoted: Parser[String] = token(skipLeft(string("\""), through("\"").map(_.dropRight(1))))
+
+  def quotedEscaped: Parser[String] = ???
 
   private def nonStrict[A](a: => Parser[A]): Parser[A] = a
 

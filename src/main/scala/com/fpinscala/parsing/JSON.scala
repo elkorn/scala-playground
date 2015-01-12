@@ -18,5 +18,4 @@ object JSON {
   case class JObject(get: Map[String, JSON]) extends JSON
 
   case object JNull extends JSON
-
 }
