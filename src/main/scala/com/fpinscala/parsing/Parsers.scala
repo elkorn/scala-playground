@@ -2,7 +2,7 @@ package com.fpinscala.parsing
 
 import java.util.regex.Pattern
 
-import com.fpinscala.testing.{Gen, Prop}
+import com.fpinscala.testing.{Gen, Prop, SGen}
 
 import scala.annotation.tailrec
 import scala.util.matching.Regex
@@ -11,16 +11,10 @@ import scala.util.matching.Regex
  * Created by elkorn on 1/10/15.
  */
 // Parser[+_] has a type that itself is a type constructor (meta-type?)
-trait Parsers[ParseError, Parser[+ _]] {
+trait Parsers[Parser[+ _]] {
   self =>
 
   def orString(s1: String, s2: String): Parser[String] = or(string(s1), string(s2))
-
-  def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A] = ???
-
-  // Does it have to be implicit for promoting String instances to Parser instances?
-  // The compiler does not seem to complain about it not being implicit...
-  implicit def string(s: String): Parser[String] = ???
 
   def orr[A](ps: Parser[A]*): Parser[A] = {
     @tailrec
@@ -31,6 +25,8 @@ trait Parsers[ParseError, Parser[+ _]] {
 
     go(ps.head, ps.tail)
   }
+
+  def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A] = ???
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
@@ -114,27 +110,6 @@ trait Parsers[ParseError, Parser[+ _]] {
   def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] =
     flatMap(pa)(a => map(pb)(b => (a, b)))
 
-  def as[A, B](a: Parser[A])(b: B): Parser[B] =
-    map(slice(a))(_ => b)
-
-  def root[A](p: Parser[A]): Parser[A] = skipRight(p, eof)
-
-  def skipRight[A](pa: => Parser[A], p0: => Parser[Any]): Parser[A] =
-    map2(pa, slice(p0))((a, _) => a)
-
-  /**
-   * Runs a parser purely to see what portion of the input string it examines.
-   * @return The portion of the input string examined by the parser if successful.
-   */
-  def slice[A](p: Parser[A]): Parser[String] = ???
-
-  /**
-   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
-   * argument - which would lead to non-termination.
-   */
-  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
-    flatMap(pa)(a => map(pb)(b => f(a, b)))
-
   implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] =
     flatMap(a)(a => succeed(f(a)))
 
@@ -146,11 +121,34 @@ trait Parsers[ParseError, Parser[+ _]] {
    */
   def succeed[A](a: A): Parser[A] = string("") map (_ => a)
 
+  // Does it have to be implicit for promoting String instances to Parser instances?
+  // The compiler does not seem to complain about it not being implicit...
+  implicit def string(s: String): Parser[String] = ???
+
   implicit def flatMap[A, B](a: Parser[A])(f: A => Parser[B]): Parser[B] = ???
 
-  def eof: Parser[String] = regex("\\z".r)
+  def as[A, B](a: Parser[A])(b: B): Parser[B] =
+    map(slice(a))(_ => b)
 
-  implicit def regex(r: Regex): Parser[String] = ???
+  /**
+   * Runs a parser purely to see what portion of the input string it examines.
+   * @return The portion of the input string examined by the parser if successful.
+   */
+  def slice[A](p: Parser[A]): Parser[String] = ???
+
+  def root[A](p: Parser[A]): Parser[A] = skipRight(p, eof)
+
+  def skipRight[A](pa: => Parser[A], p0: => Parser[Any]): Parser[A] =
+    map2(pa, slice(p0))((a, _) => a)
+
+  /**
+   * `pb` needs to be non-strict. This is due to `many` being recursive and always evaluating its second
+   * argument - which would lead to non-termination.
+   */
+  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] =
+    flatMap(pa)(a => map(pb)(b => f(a, b)))
+
+  def eof: Parser[String] = regex("\\z".r)
 
   /**
    * Parse expressions like "0", "1a", "2bb", "3ooo" and so on.
@@ -160,6 +158,8 @@ trait Parsers[ParseError, Parser[+ _]] {
   def whitespace: Parser[String] = regex("\\s*".r)
 
   def double: Parser[Double] = map(regex("[-+]?([0-9]*\\.)?[0-9]+([eE][-+]?[0-9]+)?".r))(_.toDouble)
+
+  implicit def regex(r: Regex): Parser[String] = ???
 
   def token[A](p: Parser[A]): Parser[A] =
     skipRight(p, whitespace)
@@ -177,6 +177,17 @@ trait Parsers[ParseError, Parser[+ _]] {
   def quoted: Parser[String] = token(skipLeft(string("\""), through("\"").map(_.dropRight(1))))
 
   def quotedEscaped: Parser[String] = ???
+
+  def label[A](msg: String)(p: Parser[A]): Parser[A] = ???
+
+  /**
+   * Allows nesting labels.
+   */
+  def scope[A](name: String)(p: Parser[A]): Parser[A] = ???
+
+  def errorLocation(e: ParseError): Location = ???
+
+  def errorMessage(e: ParseError): String = ???
 
   private def nonStrict[A](a: => Parser[A]): Parser[A] = a
 
@@ -198,21 +209,31 @@ trait Parsers[ParseError, Parser[+ _]] {
     def zip[B](pb: Parser[B]): Parser[(A, B)] = self.zip(p, pb)
   }
 
+  case class Location(input: String, offset: Int = 0) {
+    lazy val line = input.slice(0, offset + 1).count(_ == '\n') + 1
+    lazy val col = input.slice(0, offset + 1).lastIndexOf('\n') match {
+      case -1 => offset + 1
+      case lineStart => offset - lineStart
+    }
+  }
+
+  case class ParseError(stack: List[(Location, String)])
+
   object Laws {
     type Predicate[A] = A => Boolean
 
-    def mapIsStructurePreserving[A](p: Parser[A])(in: Gen[String]): Prop =
+    def mapIsStructurePreserving[A](p: Parser[A])(in: SGen[String]): Prop =
       equal(p, p.map(a => a))(in)
 
-    def equal[A](p1: Parser[A], p2: Parser[A])(in: Gen[String]): Prop =
+    def equal[A](p1: Parser[A], p2: Parser[A])(in: SGen[String]): Prop =
       Gen.forAll(in)(s => run(p1)(s) == run(p2)(s))
 
-    def succeedAlwaysSucceeds[A](in: Gen[String], out: A): Prop =
+    def succeedAlwaysSucceeds[A](in: SGen[String], out: A): Prop =
       Gen.forAll(in) { s =>
         succeed(out).run(s) == Right(out)
       }
 
-    def zipIsAssociative[A, B, C](pa: Parser[A], pb: Parser[B], pc: Parser[C])(in: Gen[String]): Prop =
+    def zipIsAssociative[A, B, C](pa: Parser[A], pb: Parser[B], pc: Parser[C])(in: SGen[String]): Prop =
       Gen.forAll(in)(isBijection(zip(zip(pa, pb), pc), zip(pa, zip(pb, pc))))
 
     private def isBijection[A, B, C](pl: Parser[((A, B), C)], pr: Parser[(A, (B, C))]): Predicate[String] =
@@ -222,9 +243,17 @@ trait Parsers[ParseError, Parser[+ _]] {
 
     private def unbiasRight[A, B, C](p: (A, (B, C))): (A, B, C) = (p._1, p._2._1, p._2._2)
 
-    def mapAndZipAreMutuallyAssociative[A, B, C](pa: Parser[A], pb: Parser[B])(f: A => B, g: B => C)(in: Gen[String]): Prop =
+    def mapAndZipAreMutuallyAssociative[A, B, C](pa: Parser[A], pb: Parser[B])(f: A => B, g: B => C)(in: SGen[String]): Prop =
       Gen.forAll(in) { str =>
         zip(pa.map(f), pb.map(g)).run(str) == zip(pa, pb).map { case (a, b) => (f(a), g(b))}.run(str)
+      }
+
+    def labelMustContainErrorMessage[A](p: Parser[A])(in: SGen[String]): Prop =
+      Gen.forAll(in.zipWith(Gen.string())) { case (input, msg) =>
+        run(label(msg)(p)) match {
+          case Left(err: ParseError) => errorMessage(err) == msg
+          case _ => true
+        }
       }
   }
 
