@@ -11,8 +11,9 @@ import scala.util.matching.Regex
  * Created by elkorn on 1/10/15.
  */
 // Parser[+_] has a type that itself is a type constructor (meta-type?)
-trait Parsers[Parser[+ _]] {
+trait Parsers /*[Parser[+ _]]*/ {
   self =>
+  type Parser[+A] = String => Either[ParseError, A]
 
   def orString(s1: String, s2: String): Parser[String] = or(string(s1), string(s2))
 
@@ -47,6 +48,17 @@ trait Parsers[Parser[+ _]] {
   def countChar(c: Char): Parser[Int] = char(c).many.slice.map(_.size)
 
   def char(c: Char): Parser[Char] = string(c.toString) map (_.charAt(0))
+
+  // Does it have to be implicit for promoting String instances to Parser instances?
+  // The compiler does not seem to complain about it not being implicit...
+  implicit def string(s: String): Parser[String] =
+    (input: String) =>
+      if (input.startsWith(s)) Right(s)
+      else Left(toError(s, input))
+
+  def toError(s: String, input: String): ParseError = {
+    ParseError(List((Location(input), s"Expected: $s")))
+  }
 
   /**
    * Try parsing forward as long as `p` does not fail, concatenating the results along the way.
@@ -110,6 +122,9 @@ trait Parsers[Parser[+ _]] {
   def zip[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] =
     flatMap(pa)(a => map(pb)(b => (a, b)))
 
+  def as[A, B](a: Parser[A])(b: B): Parser[B] =
+    map(slice(a))(_ => b)
+
   implicit def map[A, B](a: Parser[A])(f: A => B): Parser[B] =
     flatMap(a)(a => succeed(f(a)))
 
@@ -121,14 +136,7 @@ trait Parsers[Parser[+ _]] {
    */
   def succeed[A](a: A): Parser[A] = string("") map (_ => a)
 
-  // Does it have to be implicit for promoting String instances to Parser instances?
-  // The compiler does not seem to complain about it not being implicit...
-  implicit def string(s: String): Parser[String] = ???
-
   implicit def flatMap[A, B](a: Parser[A])(f: A => Parser[B]): Parser[B] = ???
-
-  def as[A, B](a: Parser[A])(b: B): Parser[B] =
-    map(slice(a))(_ => b)
 
   /**
    * Runs a parser purely to see what portion of the input string it examines.
@@ -188,6 +196,13 @@ trait Parsers[Parser[+ _]] {
   def errorLocation(e: ParseError): Location = ???
 
   def errorMessage(e: ParseError): String = ???
+
+  /**
+   * Delays commiting to a parse.
+   */
+  def attempt[A](p: Parser[A]): Parser[A] = ???
+
+  def fail[A]: Parser[A] = ???
 
   private def nonStrict[A](a: => Parser[A]): Parser[A] = a
 
@@ -255,6 +270,10 @@ trait Parsers[Parser[+ _]] {
           case _ => true
         }
       }
+
+    def attemptDoesNotCommitToFailedBranches[A](branchToFail: Parser[A], branchToSucceed: Parser[A])(in: SGen[String]): Prop = {
+      equal(or(attempt(flatMap(branchToFail)(_ => fail)), branchToSucceed), branchToSucceed)(in)
+    }
   }
 
 }
