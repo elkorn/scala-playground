@@ -45,19 +45,44 @@ trait Parsers /*[Parser[+ _]]*/ {
       case Success(a, offset) => Success(a, offset + consumed)
       case _ => this
     }
+
+    def slice: Result[String]
+
   }
 
-  case class Success[+A](get: A, charsConsumed: Int) extends Result[A]
+  case class Slice(length: Int) extends Result[String] {
+    def extract(s: String) = Right(s.substring(0, length))
 
-  case class Failure(get: ParseError, isCommited: Boolean = false) extends Result[Nothing]
+    def slice = this
 
-  case class ParseState(loc: Location) {
+    override def advanceSuccess(n: Int) = Slice(length + n)
+  }
+
+  case class Success[+A](get: A, charsConsumed: Int) extends Result[A] {
+    def extract(s: String) = Right(get)
+
+    def slice: Result[String] = Slice(charsConsumed)
+  }
+
+  case class Failure(get: ParseError, isCommited: Boolean = false) extends Result[Nothing] {
+    def extract(s: String) = Left(get)
+
+    def slice = this
+  }
+
+  case class ParseState(loc: Location, isSliced: Boolean = false) {
     def advanceBy(numChars: Int) =
       copy(loc = loc.copy(offset = loc.offset + numChars))
 
     def input = loc.input.substring(loc.offset)
 
     def slice(n: Int) = loc.input.substring(loc.offset, loc.offset + n)
+
+    def unslice = setSliced(false)
+
+    def reslice(s: ParseState) = setSliced(s.isSliced)
+
+    private def setSliced(state: Boolean) = copy(isSliced = state)
   }
 
   case class Location(input: String, offset: Int = 0) {
@@ -251,10 +276,7 @@ trait Parsers /*[Parser[+ _]]*/ {
   // this impl. cannot be good.
   def slice[A](p: Parser[A]): Parser[String] =
     (ps: ParseState) =>
-      p(ps) match {
-        case Success(_, offset) => Success(ps.slice(offset), offset)
-        case f: Failure => f
-      }
+      p(ps.copy(isSliced = true)).slice
 
 
   def root[A](p: Parser[A]): Parser[A] = skipRight(p, eof)
