@@ -7,13 +7,55 @@ import com.fpinscala.testing.{Gen, Prop, SGen}
 import scala.annotation.tailrec
 import scala.util.matching.Regex
 
+
 /**
  * Created by elkorn on 1/10/15.
  */
 // Parser[+_] has a type that itself is a type constructor (meta-type?)
 trait Parsers /*[Parser[+ _]]*/ {
   self =>
-  type Parser[+A] = String => Either[ParseError, A]
+
+  /**
+   * Defining the Parser type as Location => Result[A] shows that a parser is a kind
+   * of a state action that can fail. It receives an input state, and if successful,
+   * outputs a value as well as enough information to control how the state should
+   * be updated.
+   */
+  type Parser[+A] = Location => Result[A]
+
+  trait Result[+A] {
+    def mapError(f: ParseError => ParseError): Result[A] = this match {
+      case Failure(err) => Failure(f(err))
+      case _ => this
+    }
+  }
+
+  case class Success[+A](get: A, charsConsumed: Int) extends Result[A]
+
+  case class Failure(get: ParseError) extends Result[Nothing]
+
+  case class Location(input: String, offset: Int = 0) {
+    lazy val line = input.slice(0, offset + 1).count(_ == '\n') + 1
+    lazy val col = input.slice(0, offset + 1).lastIndexOf('\n') match {
+      case -1 => offset + 1
+      case lineStart => offset - lineStart
+    }
+  }
+
+  case class ParseError(stack: List[(Location, String)]) {
+    def push(loc: Location, msg: String): ParseError =
+      copy(stack = (loc, msg) :: stack)
+
+    def label[A](msg: String): ParseError =
+      ParseError(latestLoc.map((_, msg)).toList)
+
+    def latestLoc: Option[Location] = latest.map(_._1)
+
+    def latest: Option[(Location, String)] =
+      stack.lastOption
+  }
+
+  // ==============================================================================
 
   def orString(s1: String, s2: String): Parser[String] = or(string(s1), string(s2))
 
@@ -31,7 +73,7 @@ trait Parsers /*[Parser[+ _]]*/ {
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
-  implicit def run[A](p: Parser[A])(input: String): Either[ParseError, A] = ???
+  implicit def run[A](p: Parser[A])(input: String): Result[A] = ???
 
   def suboptimalCountChar(c: Char): Parser[Int] = map(many(char(c)))(_.size)
 
@@ -52,9 +94,9 @@ trait Parsers /*[Parser[+ _]]*/ {
   // Does it have to be implicit for promoting String instances to Parser instances?
   // The compiler does not seem to complain about it not being implicit...
   implicit def string(s: String): Parser[String] =
-    (input: String) =>
-      if (input.startsWith(s)) Right(s)
-      else Left(toError(s, input))
+    (loc: Location) =>
+      if (loc.input.startsWith(s)) Success(s, s.length)
+      else Failure(toError(s, loc.input))
 
   def toError(s: String, input: String): ParseError = {
     ParseError(List((Location(input), s"Expected: $s")))
@@ -142,7 +184,14 @@ trait Parsers /*[Parser[+ _]]*/ {
    * Runs a parser purely to see what portion of the input string it examines.
    * @return The portion of the input string examined by the parser if successful.
    */
-  def slice[A](p: Parser[A]): Parser[String] = ???
+  // this impl. cannot be good.
+  def slice[A](p: Parser[A]): Parser[String] =
+    (loc: Location) =>
+      run(p)(loc.input) match {
+        case Success(value, consumed) => Success(value.toString, consumed)
+        case f@Failure(err) => f
+      }
+
 
   def root[A](p: Parser[A]): Parser[A] = skipRight(p, eof)
 
@@ -167,7 +216,12 @@ trait Parsers /*[Parser[+ _]]*/ {
 
   def double: Parser[Double] = map(regex("[-+]?([0-9]*\\.)?[0-9]+([eE][-+]?[0-9]+)?".r))(_.toDouble)
 
-  implicit def regex(r: Regex): Parser[String] = ???
+  implicit def regex(r: Regex): Parser[String] =
+    (loc: Location) =>
+      r.findFirstMatchIn(loc.input) match {
+        case Some(theMatch) => Success(theMatch.matched, theMatch.start)
+        case None => Failure(toError(r.regex, loc.input))
+      }
 
   def token[A](p: Parser[A]): Parser[A] =
     skipRight(p, whitespace)
@@ -188,10 +242,12 @@ trait Parsers /*[Parser[+ _]]*/ {
 
   def label[A](msg: String)(p: Parser[A]): Parser[A] = ???
 
+
   /**
    * Allows nesting labels.
    */
-  def scope[A](name: String)(p: Parser[A]): Parser[A] = ???
+  def scope[A](name: String)(p: Parser[A]): Parser[A] =
+    loc => (p(loc)).mapError(_.push(loc, name))
 
   def errorLocation(e: ParseError): Location = ???
 
@@ -223,16 +279,6 @@ trait Parsers /*[Parser[+ _]]*/ {
 
     def zip[B](pb: Parser[B]): Parser[(A, B)] = self.zip(p, pb)
   }
-
-  case class Location(input: String, offset: Int = 0) {
-    lazy val line = input.slice(0, offset + 1).count(_ == '\n') + 1
-    lazy val col = input.slice(0, offset + 1).lastIndexOf('\n') match {
-      case -1 => offset + 1
-      case lineStart => offset - lineStart
-    }
-  }
-
-  case class ParseError(stack: List[(Location, String)])
 
   object Laws {
     type Predicate[A] = A => Boolean
