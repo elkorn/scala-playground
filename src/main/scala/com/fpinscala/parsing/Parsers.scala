@@ -28,11 +28,16 @@ trait Parsers /*[Parser[+ _]]*/ {
       case Failure(err) => Failure(f(err))
       case _ => this
     }
+
+    def uncommit: Result[A] = this match {
+      case Failure(err, true) => Failure(err, false)
+      case _ => this
+    }
   }
 
   case class Success[+A](get: A, charsConsumed: Int) extends Result[A]
 
-  case class Failure(get: ParseError) extends Result[Nothing]
+  case class Failure(get: ParseError, isCommited: Boolean = false) extends Result[Nothing]
 
   case class ParseState(loc: Location) {
     def advanceBy(numChars: Int) =
@@ -78,7 +83,11 @@ trait Parsers /*[Parser[+ _]]*/ {
     go(ps.head, ps.tail)
   }
 
-  def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A] = ???
+  def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A] =
+    ps => p1(ps) match {
+      case Failure(err, false) => p2(ps)
+      case other => other
+    }
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
 
@@ -288,11 +297,11 @@ trait Parsers /*[Parser[+ _]]*/ {
   def errorMessage(e: ParseError): String = ???
 
   /**
-   * Delays commiting to a parse.
+   * Delays committing to a parse.
    */
-  def attempt[A](p: Parser[A]): Parser[A] = ???
+  def attempt[A](p: Parser[A]): Parser[A] = ps => p(ps).uncommit
 
-  def fail[A]: Parser[A] = ???
+  def fail[A](msg: String): Parser[A] = ps => Failure(toError(msg, ps), true)
 
   private def nonStrict[A](a: => Parser[A]): Parser[A] = a
 
