@@ -21,7 +21,7 @@ trait Parsers /*[Parser[+ _]]*/ {
    * outputs a value as well as enough information to control how the state should
    * be updated.
    */
-  type Parser[+A] = Location => Result[A]
+  type Parser[+A] = ParseState => Result[A]
 
   trait Result[+A] {
     def mapError(f: ParseError => ParseError): Result[A] = this match {
@@ -33,6 +33,15 @@ trait Parsers /*[Parser[+ _]]*/ {
   case class Success[+A](get: A, charsConsumed: Int) extends Result[A]
 
   case class Failure(get: ParseError) extends Result[Nothing]
+
+  case class ParseState(loc: Location) {
+    def advanceBy(numChars: Int) =
+      copy(loc = loc.copy(offset = loc.offset + numChars))
+
+    def input = loc.input.substring(loc.offset)
+
+    def slice(n: Int) = loc.input.substring(loc.offset, loc.offset + n)
+  }
 
   case class Location(input: String, offset: Int = 0) {
     lazy val line = input.slice(0, offset + 1).count(_ == '\n') + 1
@@ -91,15 +100,40 @@ trait Parsers /*[Parser[+ _]]*/ {
 
   def char(c: Char): Parser[Char] = string(c.toString) map (_.charAt(0))
 
+  private def firstNonMatchingIndex(target: String, source: String, offset: Int = 0): Int = {
+    val ns = source.length
+    val nt = target.length
+    val n = ns min nt
+
+    @tailrec
+    def go(current: Int): Int = {
+      if (current < n) {
+        if (source.charAt(current + offset) != target.charAt(current)) current
+        else go(current + 1)
+      } else -1
+    }
+
+    val result = go(0)
+
+    if (result == -1) {
+      if (ns - offset >= nt) -1
+      else ns - offset
+    }
+    else result
+  }
+
   // Does it have to be implicit for promoting String instances to Parser instances?
   // The compiler does not seem to complain about it not being implicit...
   implicit def string(s: String): Parser[String] =
-    (loc: Location) =>
-      if (loc.input.startsWith(s)) Success(s, s.length)
-      else Failure(toError(s, loc.input))
+    (ps: ParseState) => {
+      firstNonMatchingIndex(s, ps.loc.input, ps.loc.offset) match {
+        case -1 => Success(s, s.length)
+        case n => Failure(toError(s"'$s'", ps.advanceBy(n)))
+      }
+    }
 
-  def toError(s: String, input: String): ParseError = {
-    ParseError(List((Location(input), s"Expected: $s")))
+  def toError(s: String, input: ParseState): ParseError = {
+    ParseError(List((input.loc, s"Expected: $s")))
   }
 
   /**
@@ -186,10 +220,10 @@ trait Parsers /*[Parser[+ _]]*/ {
    */
   // this impl. cannot be good.
   def slice[A](p: Parser[A]): Parser[String] =
-    (loc: Location) =>
-      run(p)(loc.input) match {
-        case Success(value, consumed) => Success(value.toString, consumed)
-        case f@Failure(err) => f
+    (ps: ParseState) =>
+      p(ps) match {
+        case Success(_, offset) => Success(ps.slice(offset), offset)
+        case f: Failure => f
       }
 
 
@@ -217,10 +251,10 @@ trait Parsers /*[Parser[+ _]]*/ {
   def double: Parser[Double] = map(regex("[-+]?([0-9]*\\.)?[0-9]+([eE][-+]?[0-9]+)?".r))(_.toDouble)
 
   implicit def regex(r: Regex): Parser[String] =
-    (loc: Location) =>
-      r.findFirstMatchIn(loc.input) match {
+    (ps: ParseState) =>
+      r.findFirstMatchIn(ps.loc.input) match {
         case Some(theMatch) => Success(theMatch.matched, theMatch.start)
-        case None => Failure(toError(r.regex, loc.input))
+        case None => Failure(toError(s"/$r.regex/", ps))
       }
 
   def token[A](p: Parser[A]): Parser[A] =
@@ -247,7 +281,7 @@ trait Parsers /*[Parser[+ _]]*/ {
    * Allows nesting labels.
    */
   def scope[A](name: String)(p: Parser[A]): Parser[A] =
-    loc => (p(loc)).mapError(_.push(loc, name))
+    (ps: ParseState) => (p(ps)).mapError(_.push(ps.loc, name))
 
   def errorLocation(e: ParseError): Location = ???
 
