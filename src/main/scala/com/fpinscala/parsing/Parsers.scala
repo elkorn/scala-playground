@@ -29,8 +29,20 @@ trait Parsers /*[Parser[+ _]]*/ {
       case _ => this
     }
 
-    def uncommit: Result[A] = this match {
-      case Failure(err, true) => Failure(err, false)
+    def uncommit: Result[A] = setCommit(false)
+
+    def commit: Result[A] = setCommit(true)
+
+    def setCommit(commit: Boolean): Result[A] = this match {
+      case Failure(err, state) => Failure(err, state || commit)
+      case _ => this
+    }
+
+    /**
+     * Increments the number of characters consumed after a successful result.
+     */
+    def advanceSuccess(consumed: Int): Result[A] = this match {
+      case Success(a, offset) => Success(a, offset + consumed)
       case _ => this
     }
   }
@@ -221,7 +233,13 @@ trait Parsers /*[Parser[+ _]]*/ {
    */
   def succeed[A](a: A): Parser[A] = string("") map (_ => a)
 
-  implicit def flatMap[A, B](a: Parser[A])(f: A => Parser[B]): Parser[B] = ???
+  implicit def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B] =
+    ps => p(ps) match {
+      case Success(value, consumed) => f(value)(ps.advanceBy(consumed))
+        .setCommit(consumed != 0)
+        .advanceSuccess(consumed)
+      case e: Failure => e
+    }
 
   /**
    * Runs a parser purely to see what portion of the input string it examines.
