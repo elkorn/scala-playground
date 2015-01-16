@@ -101,9 +101,12 @@ trait Parsers /*[Parser[+ _]]*/ {
       case other => other
     }
 
-  def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ???
+  def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] = ps => p(ps) match {
+    case Success(result, consumed) => Success(List.fill(n)(result), consumed)
+    case f: Failure => f
+  }
 
-  implicit def run[A](p: Parser[A])(input: String): Result[A] = ???
+  implicit def run[A](p: Parser[A])(input: String): Result[A] = p(ParseState(Location(input)))
 
   def suboptimalCountChar(c: Char): Parser[Int] = map(many(char(c)))(_.size)
 
@@ -301,18 +304,13 @@ trait Parsers /*[Parser[+ _]]*/ {
 
   def quotedEscaped: Parser[String] = ???
 
-  def label[A](msg: String)(p: Parser[A]): Parser[A] = ???
-
+  def label[A](msg: String)(p: Parser[A]): Parser[A] = ps => p(ps).mapError(_.label(msg))
 
   /**
    * Allows nesting labels.
    */
   def scope[A](name: String)(p: Parser[A]): Parser[A] =
     (ps: ParseState) => (p(ps)).mapError(_.push(ps.loc, name))
-
-  def errorLocation(e: ParseError): Location = ???
-
-  def errorMessage(e: ParseError): String = ???
 
   /**
    * Delays committing to a parse.
@@ -334,7 +332,7 @@ trait Parsers /*[Parser[+ _]]*/ {
 
     def many: Parser[List[A]] = self.many(p)
 
-    def run(s: String): Either[ParseError, A] = self.run(p)(s)
+    def run(s: String): Result[A] = self.run(p)(s)
 
     def slice: Parser[String] = self.slice(p)
 
@@ -373,13 +371,13 @@ trait Parsers /*[Parser[+ _]]*/ {
     def labelMustContainErrorMessage[A](p: Parser[A])(in: SGen[String]): Prop =
       Gen.forAll(in.zipWith(Gen.string())) { case (input, msg) =>
         run(label(msg)(p)) match {
-          case Left(err: ParseError) => errorMessage(err) == msg
+          case Left(err: ParseError) => err.latest.get._2 == msg
           case _ => true
         }
       }
 
     def attemptDoesNotCommitToFailedBranches[A](branchToFail: Parser[A], branchToSucceed: Parser[A])(in: SGen[String]): Prop = {
-      equal(or(attempt(flatMap(branchToFail)(_ => fail)), branchToSucceed), branchToSucceed)(in)
+      equal(or(attempt(flatMap(branchToFail)(_ => fail("test"))), branchToSucceed), branchToSucceed)(in)
     }
   }
 
