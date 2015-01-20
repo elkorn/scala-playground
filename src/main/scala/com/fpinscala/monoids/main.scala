@@ -70,6 +70,11 @@ object Monoid {
     override def zero: A = m.zero
   }
 
+  def concatenate[A](as: List[A], m: Monoid[A]): A = as.foldLeft(m.zero)(m.op)
+
+  def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
+    as.foldLeft(m.zero)((result, a2) => m.op(result, f(a2)))
+
   def monoidLaws[A](m: Monoid[A])(gen: SGen[A]): Prop = {
     def isAssociative(x: A, y: A, z: A): Boolean =
       m.op(x, m.op(y, z)) == m.op(m.op(x, y), z)
