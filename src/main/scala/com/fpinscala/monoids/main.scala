@@ -58,11 +58,22 @@ object Monoid {
     override def zero: Option[A] = None
   }
 
+  def concatenate[A](as: List[A], m: Monoid[A]): A = as.foldLeft(m.zero)(m.op)
+
+  def foldRight[A, B](as: List[A])(z: B)(f: (A, B) => B): B =
+    foldMap(as, endofunction[B])(f.curried)(z)
+
   def endofunction[A]: Monoid[A => A] = new Monoid[(A) => A] {
     override def op(a1: (A) => A, a2: (A) => A): (A) => A = a1 compose a2
 
     override def zero: (A) => A = (a) => a
   }
+
+  def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
+    as.foldLeft(m.zero)((result, a2) => m.op(result, f(a2)))
+
+  def foldLeft[A, B](as: List[A])(z: B)(f: (A, B) => B): B =
+    foldMap(as, dual(endofunction[B]))(f.curried)(z)
 
   def dual[A](m: Monoid[A]): Monoid[A] = new Monoid[A] {
     override def op(a1: A, a2: A): A = m.op(a2, a1)
@@ -70,10 +81,15 @@ object Monoid {
     override def zero: A = m.zero
   }
 
-  def concatenate[A](as: List[A], m: Monoid[A]): A = as.foldLeft(m.zero)(m.op)
+  def foldMapV[A, B](v: IndexedSeq[A])(m: Monoid[B])(f: A => B): B =
+    if (v.length == 0) m.zero
+    else if (v.length == 1) f(v(0))
+    else {
+      val split = v.splitAt(v.length / 2)
+      m.op(foldMapV(split._1)(m)(f), foldMapV(split._2)(m)(f))
+    }
 
-  def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
-    as.foldLeft(m.zero)((result, a2) => m.op(result, f(a2)))
+
 
   def monoidLaws[A](m: Monoid[A])(gen: SGen[A]): Prop = {
     def isAssociative(x: A, y: A, z: A): Boolean =
