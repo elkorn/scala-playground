@@ -1,4 +1,4 @@
-package com.fpinscala.old
+package com.fp.old
 
 import scala.annotation.tailrec
 

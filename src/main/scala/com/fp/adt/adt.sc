@@ -1,5 +1,5 @@
-import com.fpinscala.adt.Tree
-import com.fpinscala.adt.Tree.{Branch, Leaf}
+import com.fp.adt.Tree
+import com.fp.adt.Tree.{Branch, Leaf}
 
 val tree1 = Branch(
   Branch(

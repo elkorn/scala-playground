@@ -1,7 +1,7 @@
-package com.fpinscala.testing
+package com.fp.testing
 
-import com.fpinscala.purestate.RNG
-import com.fpinscala.testing.Prop.{FailedCase, MaxSize, TestCases}
+import com.fp.purestate.RNG
+import com.fp.testing.Prop.{FailedCase, MaxSize, TestCases}
 
 object Prop {
   type FailedCase = String

@@ -1,5 +1,5 @@
-import com.fpinscala.purestate.RNG
-import com.fpinscala.testing._
+import com.fp.purestate.RNG
+import com.fp.testing._
 
 val simple = RNG.simple(3)
 val (r1, rng1) = Gen.boolean.sample.run(simple)

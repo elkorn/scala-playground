@@ -1,7 +1,7 @@
-package com.fpinscala
+package com.fp
 
-import com.fpinscala.monoids.Monoid
-import com.fpinscala.testing.{Gen, PropertyTesting}
+import com.fp.monoids.Monoid
+import com.fp.testing.{Gen, PropertyTesting}
 import org.p99.scala.UnitSpec
 import org.scalatest.Matchers
 

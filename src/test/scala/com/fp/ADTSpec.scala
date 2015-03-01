@@ -1,7 +1,7 @@
-package com.fpinscala
+package com.fp
 
-import com.fpinscala.adt.Tree
-import com.fpinscala.testing.{Gen, Passed, Prop}
+import com.fp.adt.Tree
+import com.fp.testing.{Gen, Passed, Prop}
 import org.p99.scala.UnitSpec
 import org.scalatest.Matchers
 

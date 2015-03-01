@@ -1,7 +1,7 @@
 import java.util.concurrent.{Executors, Future}
 
-import com.fpinscala.Par
-import com.fpinscala.Par.Par
+import com.fp.Par
+import com.fp.Par.Par
 
 object parallelism3 {
   val pool = Executors.newSingleThreadExecutor()

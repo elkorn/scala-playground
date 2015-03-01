@@ -1,8 +1,8 @@
-package com.fpinscala.testing
+package com.fp.testing
 
-import com.fpinscala.adt.Tree
-import com.fpinscala.adt.Tree.{Branch, Leaf}
-import com.fpinscala.purestate.{RNG, State}
+import com.fp.adt.Tree
+import com.fp.adt.Tree.{Branch, Leaf}
+import com.fp.purestate.{RNG, State}
 
 case class Gen[+A](sample: State[RNG, A]) {
   def map[B](f: A => B): Gen[B] = {

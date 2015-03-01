@@ -1,4 +1,4 @@
-package com.fpinscala.purestate
+package com.fp.purestate
 
 
 trait RNG {

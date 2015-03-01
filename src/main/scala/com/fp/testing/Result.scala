@@ -1,6 +1,6 @@
-package com.fpinscala.testing
+package com.fp.testing
 
-import com.fpinscala.testing.Prop.{FailedCase, SuccessCount}
+import com.fp.testing.Prop.{FailedCase, SuccessCount}
 
 
 // This is equivalent to the previous  type Result = Option[(FailedCase, SuccessCount)]

@@ -1,4 +1,4 @@
-package com.fpinscala.testing
+package com.fp.testing
 
 case class SGen[+A](forSize: Int => Gen[A]) {
   def map[B](f: A => B): SGen[B] =

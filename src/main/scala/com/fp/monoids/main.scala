@@ -1,6 +1,6 @@
-package com.fpinscala.monoids
+package com.fp.monoids
 
-import com.fpinscala.testing.{Gen, Prop, SGen}
+import com.fp.testing.{Gen, Prop, SGen}
 
 /**
  * A monoid is defined only by its algebra.
@@ -81,13 +81,19 @@ object Monoid {
     override def zero: A = m.zero
   }
 
-  def foldMapV[A, B](v: IndexedSeq[A])(m: Monoid[B])(f: A => B): B =
+  def foldMapV[A, B](v: IndexedSeq[A])(m: Monoid[B])(f: A => B): B = {
     if (v.length == 0) m.zero
     else if (v.length == 1) f(v(0))
     else {
       val split = v.splitAt(v.length / 2)
       m.op(foldMapV(split._1)(m)(f), foldMapV(split._2)(m)(f))
     }
+  }
+
+
+//
+//  def par[A](m: Monoid[A]): Monoid[Par[A]]
+//  def parFoldMap[A,B](v: IndexedSeq[A], m: Monoid[B])(f: A => B): Par[B]
 
 
 

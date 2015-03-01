@@ -1,4 +1,4 @@
-package com.fpinscala.testing
+package com.fp.testing
 
 import org.scalatest.Matchers
 

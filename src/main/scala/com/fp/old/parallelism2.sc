@@ -1,7 +1,7 @@
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{Callable, CountDownLatch, ExecutorService, Executors}
 
-import com.fpinscala.Actor
+import com.fp.Actor
 
 import scala.util.{Failure, Success, Try}
 

@@ -1,5 +1,5 @@
-import com.fpinscala.monoids.Monoid
-import com.fpinscala.testing.{Gen, Prop}
+import com.fp.monoids.Monoid
+import com.fp.testing.{Gen, Prop}
 
 Monoid.string.op("abc", "def")
 Monoid.list[Int].op(List(1, 2, 3), List(1, 2, 3))

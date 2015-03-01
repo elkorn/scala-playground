@@ -1,4 +1,4 @@
-package com.fpinscala.adt
+package com.fp.adt
 
 /**
  * Created by elkorn on 1/10/15.

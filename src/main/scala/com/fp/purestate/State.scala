@@ -1,4 +1,4 @@
-package com.fpinscala.purestate
+package com.fp.purestate
 
 object State {
   def unit[S, A](value: A): State[S, A] = State((value, _))
