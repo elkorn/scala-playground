@@ -1,0 +1,39 @@
+
+INFO: vimside#options#manager: s:full_path=/home/elkorn/.config/dotfiles/dotfiles/.vim/bundle/vimside/autoload/vimside/options/manager.vim
+INFO: vimside#options#manager: s:full_dir=/home/elkorn/.config/dotfiles/dotfiles/.vim/bundle/vimside/autoload/vimside/options
+INFO: vimside#options#manager: s:data_vimside_dir=/home/elkorn/.config/dotfiles/dotfiles/.vim/bundle/vimside/data/vimside
+INFO: vimside#options#manager#Load: TOP
+INFO: vimside#options#manager#LoadUser: TOP
+INFO: vimside#options#manager#LoadUser: UserOptionsFile l:tmpfile=/home/elkorn/.config/dotfiles/dotfiles/.vim/bundle/vimside/data/vimside/options_user.vim
+INFO: vimside#options#manager#LoadUser: UserOptionsFile sourcing=/home/elkorn/.config/dotfiles/dotfiles/.vim/bundle/vimside/data/vimside/options_user.vim
+INFO: vimside#options#manager#LoadUser: UserPropertiesFile l:tmpfile=/home/elkorn/.config/dotfiles/dotfiles/.vim/bundle/vimside/data/vimside/vimside.properties
+INFO: vimside#options#manager#LoadUser: UserPropertiesFile l:files=[]
+INFO: vimside#options#manager#LoadUser: BOTTOM
+INFO: vimside#options#manager#LoadProject: TOP
+INFO: vimside#options#manager#LoadProject: look_local=0
+INFO: vimside#options#manager#LoadProject: look_local=1
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile l:file_name=project.properties
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile dir=/home/elkorn/Code/scala/scala-playground
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile l:tmp_file=/home/elkorn/Code/scala/scala-playground/project.properties
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile up one dir=/home/elkorn/Code/scala
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile l:tmp_file=/home/elkorn/Code/scala/project.properties
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile up one dir=/home/elkorn/Code
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile l:tmp_file=/home/elkorn/Code/project.properties
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile up one dir=/home/elkorn
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile l:tmp_file=/home/elkorn/project.properties
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile up one dir=/home
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile l:tmp_file=/home/project.properties
+INFO: vimside#options#manager#LoadProject: ProjectPropertiesFile up one dir=/
+INFO: vimside#options#manager#LoadProject: BOTTOM
+INFO: vimside#options#manager#Load: ensime-config-file-name=.ensime
+INFO: vimside#options#manager#Load: dir=/home/elkorn/Code/scala/scala-playground
+INFO: vimside#options#manager#Load: l:tmp_config_file=/home/elkorn/Code/scala/scala-playground/.ensime
+INFO: vimside#options#manager#Load: dir=/home/elkorn/Code/scala
+INFO: vimside#options#manager#Load: l:tmp_config_file=/home/elkorn/Code/scala/.ensime
+INFO: vimside#options#manager#Load: dir=/home/elkorn/Code
+INFO: vimside#options#manager#Load: l:tmp_config_file=/home/elkorn/Code/.ensime
+INFO: vimside#options#manager#Load: dir=/home/elkorn
+INFO: vimside#options#manager#Load: l:tmp_config_file=/home/elkorn/.ensime
+INFO: vimside#options#manager#Load: dir=/home
+INFO: vimside#options#manager#Load: l:tmp_config_file=/home/.ensime
+INFO: vimside#options#manager#Load: dir=/
