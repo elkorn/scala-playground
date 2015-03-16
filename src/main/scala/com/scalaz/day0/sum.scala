@@ -54,10 +54,15 @@ object Sum {
       }
 
       object Step4_1 {
-        private object m {
-          implicit object SumMonoid extends Monoid[Int] {
+        object m {
+          implicit object Ints extends Monoid[Int] {
             def mappend(a: Int, b: Int): Int = a + b
             def mzero: Int = 0
+          }
+
+          implicit object Strings extends Monoid[String] {
+            def mappend(a: String, b: String): String = a + b
+            def mzero: String = ""
           }
         }
 
@@ -93,6 +98,8 @@ object Sum {
         //   xs.foldLeft(m.mzero)(m.mappend)  
         // }
 
+        // Thanks to monoids, we now have a function that generalizes on the 
+        // folding operation.
         def sum[A](xs: List[A])(implicit m: Monoid[A]) = xs.foldLeft(m.mzero)(m.mappend)
 
         def showDefault() = sum(1::2::Nil)
