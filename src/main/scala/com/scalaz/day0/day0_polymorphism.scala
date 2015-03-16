@@ -42,4 +42,6 @@ object Polymorphism {
     def show() = plus(12,13)
     def showString() = plus("a", "b")
   }
+
+  def show() = print(Parametric.show(), AdHoc.show())
 }
