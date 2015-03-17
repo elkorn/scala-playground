@@ -5,6 +5,7 @@ object Main extends App {
    println((
      Equal.show()::
      Order.show()::
+     Show.show()::
      Nil)
      .mkString("\n"))
  }
