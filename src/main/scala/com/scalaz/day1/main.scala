@@ -6,6 +6,11 @@ object Main extends App {
      Equal.show()::
      Order.show()::
      Show.show()::
+     Enum.show()::
+     Bounded.show()::
+     Typeclasses.Step1.show()::
+     Typeclasses.Step2.show()::
+     YesNoTypeclass.show()::
      Nil)
      .mkString("\n"))
  }
