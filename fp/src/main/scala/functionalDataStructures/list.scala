@@ -49,7 +49,6 @@ object List {
      Right-associative folding.
      */
   def foldRight[A, B](as: List[A], zero: B)(f: (A, B) => B): B = {
-    println(as)
     as match {
       case Nil => zero
       case Cons(head, tail) => f(head, foldRight(tail, zero)(f))
@@ -63,7 +62,6 @@ object List {
      */
   @tailrec
   def foldLeft[A, B](as: List[A], zero: B)(f: (B, A) => B): B = {
-    println(as)
     as match {
       case Nil => zero
       case Cons(head, tail) => foldLeft(tail, f(zero, head))(f)

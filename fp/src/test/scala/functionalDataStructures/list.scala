@@ -2,7 +2,7 @@ package fp.functionalDataStructures
 
 import org.scalatest._
 
-class FdsSpec extends FlatSpec with Matchers {
+class ListSpec extends FlatSpec with Matchers {
   "tail" should "return the tail of a list" in {
     val list = List.apply[Int](1, 2, 3)
     list.tail should equal(List(2, 3))
