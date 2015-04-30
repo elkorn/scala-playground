@@ -26,5 +26,27 @@ class TreeSpec extends FlatSpec with Matchers {
     val tree = Branch(Branch(Leaf(3), Leaf(2)), Leaf(3))
     Tree.map(tree)(_.toString) should equal(Branch(Branch(Leaf("3"), Leaf("2")), Leaf("3")))
   }
+
+  "map2" should "work the same as map" in {
+    val tree = Branch(Branch(Leaf(3), Leaf(2)), Leaf(3))
+    Tree.map2(tree)(_.toString) should equal(Tree.map(tree)(_.toString))
+  }
+
+  "depth2" should "work the same as depth" in {
+    val tree = Branch(Branch(Leaf(3), Branch(Leaf(1), Leaf(1))), Leaf(3))
+    Tree.depth2(tree) should equal(Tree.depth(tree))
+  }
+
+  "maximum2" should "work the same as maximum" in {
+    val tree1 = Branch(Branch(Leaf(3), Leaf(2)), Leaf(3))
+    val tree2 = Branch(Branch(Leaf(3), Leaf(5)), Leaf(1))
+    Tree.maximum2(tree1) should equal(Tree.maximum(tree1))
+    Tree.maximum2(tree2) should equal(Tree.maximum(tree2))
+  }
+
+  "size2" should "work the same as size" in {
+    val tree = Branch(Branch(Leaf(1), Leaf(2)), Leaf(3))
+    Tree.size2(tree) should equal(Tree.size(tree))
+  }
 }
 
