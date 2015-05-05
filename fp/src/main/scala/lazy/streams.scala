@@ -1,5 +1,7 @@
 package fp.Lazy
 
+import scala.annotation.tailrec
+
 sealed trait Stream[+A] {
   def headOption: Option[A] = this match {
     case Empty => None
@@ -51,6 +53,24 @@ sealed trait Stream[+A] {
   // all folding iterations except the one with the head from happening.
   def headOption2(): Option[A] =
     foldRight(None: Option[A])((head, _) => Some(head))
+
+  def append[B >: A](value: => Stream[B]): Stream[B] =
+    foldRight(value)(Stream.cons(_, _))
+
+  def appendValue[B >: A](value: => B): Stream[B] =
+    append(Stream.cons(value, Stream.empty))
+
+  def map[B](f: A => B): Stream[B] =
+    foldRight(Stream.empty[B])((a, b) => Stream.cons(f(a), b))
+
+  def flatMap[B](f: A => Stream[B]): Stream[B] =
+    foldRight(Stream.empty[B])((a, b) => f(a) append b)
+
+  def filter(p: A => Boolean): Stream[A] =
+    foldRight(Stream.empty[A])((h, t) => if (p(h)) Stream.cons(h, t) else t)
+
+  def find(p: A => Boolean): Option[A] =
+    filter(p).headOption
 }
 
 case object Empty extends Stream[Nothing]
@@ -67,4 +87,21 @@ object Stream {
 
   def apply[A](as: A*): Stream[A] =
     if (as.isEmpty) Empty else cons(as.head, apply(as.tail: _*))
+
+  def constant[A](a: A): Stream[A] =
+    cons(a, constant(a))
+
+  def from(n: Int): Stream[Int] =
+    cons(n, from(n + 1))
+
+  def fibs(): Stream[Int] = {
+    def go(prev1: Int, prev2: Int): Stream[Int] =
+      cons(prev2, go(prev2, prev1 + prev2))
+    cons(0, go(0, 1))
+  }
+
+  def unfold[A, B](zero: B)(f: B => Option[(A, B)]): Stream[A] = f(zero) match {
+    case Some((next, newZero)) => cons(next, unfold(newZero)(f))
+    case None => empty
+  }
 }
