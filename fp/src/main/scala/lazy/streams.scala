@@ -71,6 +71,45 @@ sealed trait Stream[+A] {
 
   def find(p: A => Boolean): Option[A] =
     filter(p).headOption
+
+  def map2[B](f: A => B): Stream[B] =
+    Stream.unfold(this) {
+      case Cons(h, t) => Some((f(h()), t()))
+      case _ => None
+    }
+
+  def take2(n: Int): Stream[A] =
+    Stream.unfold((this, n)) {
+      case (_, 0) => None
+      case (Empty, _) => None
+      case (Cons(h, t), n) => Some((h(), (t(), n - 1)))
+    }
+
+  def takeWhile3(p: A => Boolean): Stream[A] =
+    Stream.unfold(this) {
+      case Cons(h, t) if (p(h())) => Some((h(), t()))
+      case _ => None
+    }
+
+  def zipWith[B, C](bs: => Stream[B])(f: (A, B) => C): Stream[C] =
+    Stream.unfold((this, bs)) {
+      case (Cons(ha, ta), Cons(hb, tb)) => Some(f(ha(), hb()), (ta(), tb()))
+      case _ => None
+    }
+
+  def zipAll[B](bs: => Stream[B]): Stream[(Option[A], Option[B])] =
+    Stream.unfold((this, bs)) {
+      case (Cons(ha, ta), Cons(hb, tb)) => Some((Some(ha()), Some(hb())), (ta(), tb()))
+      case (Empty, Cons(h, t)) => Some(((None, Some(h())), (Empty, t())))
+      case (Cons(h, t), Empty) => Some(((Some(h()), None), (t(), Empty)))
+      case _ => None
+    }
+
+  def startsWith[A](s: => Stream[A]): Boolean =
+    zipAll(s).takeWhile((t) => t._1.isDefined && t._2.isDefined).forAll {
+      case (Some(a), Some(b)) => a == b
+      case _ => false
+    }
 }
 
 case object Empty extends Stream[Nothing]
@@ -91,6 +130,8 @@ object Stream {
   def constant[A](a: A): Stream[A] =
     cons(a, constant(a))
 
+  def ones(): Stream[Int] = constant(1)
+
   def from(n: Int): Stream[Int] =
     cons(n, from(n + 1))
 
@@ -104,4 +145,19 @@ object Stream {
     case Some((next, newZero)) => cons(next, unfold(newZero)(f))
     case None => empty
   }
+
+  def fibs2(): Stream[Int] = {
+    unfold((0, 1)) {
+      case (f1: Int, f2: Int) => Some(f1, (f2, f1 + f2))
+    }
+  }
+
+  def constant2[A](a: A): Stream[A] =
+    unfold(a)((_) => Some(a, a))
+
+  def from2(n: Int): Stream[Int] =
+    unfold(n)((r) => Some(r, r + 1))
+
+  def ones2(): Stream[Int] = constant2(1)
+
 }
