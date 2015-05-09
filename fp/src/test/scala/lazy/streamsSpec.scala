@@ -129,4 +129,17 @@ class StreamsSpec extends FlatSpec with Matchers {
     stream.startsWith(Stream(1, 2, 3)) should equal(true)
     stream.startsWith(Stream(2, 3)) should equal(false)
   }
+
+  "tails" should "return al suffixes of a strean" in {
+    stream.take(3).tails.toList.map(_.toList) should equal(Stream(Stream(1, 2, 3), Stream(2, 3), Stream(3)).toList.map(_.toList))
+    stream.take(1).tails.toList.map(_.toList) should equal(Stream(Stream(1)).toList.map(_.toList))
+  }
+
+  "scanRight" should "apply a folding function, returning the intermediate results" in {
+    def add(a: Int, b: Int): Int = {
+      println(s"$a + $b")
+      a + b
+    }
+    stream.take(3).scanRight(0)(add(_, _)).toList should equal(Stream(6, 5, 3, 0).toList)
+  }
 }
