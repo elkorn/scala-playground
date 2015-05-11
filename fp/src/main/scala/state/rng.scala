@@ -16,6 +16,12 @@ case class SimpleRNG(seed: Long) extends RNG {
 }
 
 object RNG {
+  // Just making the concept explicit.
+  type State[State, +Result] = State => (Result, State)
+  // This type denotes a state transition of a random generator.
+  // State transitions can also be called state actions.
+  type Rand[+A] = State[RNG, A]
+
   def randomPair(rng: RNG): (Int, Int) = {
     val (i1, rng2) = rng.nextInt
     val (i2, rng3) = rng2.nextInt
@@ -67,4 +73,52 @@ object RNG {
     }), intermediate)
 
   }
+
+  def unit[A](a: A): Rand[A] =
+    (rng) => (a, rng)
+
+  def map[A, B](r: Rand[A])(f: A => B): Rand[B] =
+    rng => {
+      val (a, rng2) = r(rng)
+      (f(a), rng2)
+    }
+
+  val double2: Rand[Double] = map(nonNegativeInt)(_ / (Int.MaxValue.toDouble + 1))
+
+  def map2[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
+    rng1 => {
+      val (a, rng2) = ra(rng1)
+      val (b, rng3) = rb(rng2)
+      (f(a, b), rng3)
+    }
+
+  def both[A, B](ra: Rand[A], rb: Rand[B]): Rand[(A, B)] = map2(ra, rb)((_, _))
+
+  def int: Rand[Int] = _.nextInt
+
+  def intDouble2: Rand[(Int, Double)] = both(int, double)
+  def doubleInt2: Rand[(Double, Int)] = both(double, int)
+
+  def sequence[A](ras: List[Rand[A]]): Rand[List[A]] =
+    rng => ras.foldRight((Nil: List[A], rng))((ra, p) => {
+      val (a, rng2) = ra(p._2)
+      (a :: p._1, rng2)
+    })
+
+  def sequence2[A](ras: List[Rand[A]]): Rand[List[A]] = {
+    ras.foldRight(unit(List[A]()))((a, r) => map2(a, r)(_ :: _))
+  }
+
+  def flatMap[A, B](ra: Rand[A])(f: A => Rand[B]): Rand[B] =
+    rng1 => {
+      val (a, rng2) = ra(rng1)
+      f(a)(rng2)
+    }
+
+  def map_2[A, B](ra: Rand[A])(f: A => B): Rand[B] =
+    flatMap(ra)((x) => unit(f(x)))
+
+  // This should be a for-comprehension, but we did not yet get to typeclasses.
+  def map2_2[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
+    flatMap(ra)(a => flatMap(rb)(b => unit(f(a, b))))
 }
