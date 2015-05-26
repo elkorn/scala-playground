@@ -1,10 +1,15 @@
 package fp.state.parallelism
 
-import java.util.concurrent.{ Future, ExecutorService, Callable, TimeUnit }
+import java.util.concurrent.{ ExecutorService, Callable, TimeUnit, CountDownLatch }
+import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration._
 
 package object parallelism {
   type Par[A] = ExecutorService => Future[A]
+}
+
+sealed trait Future[A] {
+  private[parallelism] def apply(k: A => Unit): Unit
 }
 
 object Par {
@@ -12,7 +17,7 @@ object Par {
 
   private case class UnitFuture[A](get: A) extends Future[A] {
     def isDone = true
-    def get(timeout: Long, units: TimeUnit) = get
+    def get(timeout: Long, units: TimeUnit) = apply(a => ())
     def isCancelled = false
     def cancel(evenIfRunning: Boolean): Boolean = false
   }
@@ -42,37 +47,29 @@ object Par {
     }
   }
 
-  def unit[A](a: A): Par[A] = es => UnitFuture(a)
+  def run[A](es: ExecutorService)(pa: Par[A]): A = {
+    val ref = new AtomicReference[A]
+    val latch = new CountDownLatch(1)
+
+    pa(es) { a =>
+      ref.set(a)
+      latch.countDown
+    }
+
+    latch.await
+    ref.get
+  }
+
+  def unit[A](a: A): Par[A] =
+    ex => new Future[A] {
+      def apply(cb: A => Unit): Unit = cb(a)
+    }
   // A derived combinator - one that is expressed wholly in terms of other operations.
   // It does not need to know anything about the representation of Par.
   def lazyUnit[A](a: => A) = ??? // fork(unit(a))
 
   def asyncF[A, B](f: A => B): A => Par[B] =
     a => lazyUnit(f(a))
-
-  /*
-   Allows the user of the library to specify explicitly that a
-   computation should be run on a separate logical thread.
-   map2 can be made strict, since the decision of forking is left to the user.
-   */
-  // def fork[A](a: => Par[A]): Par[A] =
-  //   es => es.submit(new Callable[A] {
-  //     def call = a(es).get
-  //   })
-
-  /*
-   Extracts the value from a computation by performing it.
-   Returning a Future gives more control to the user by leaving timeouts, cancellation etc. up to her.
-   */
-  def run[A](es: ExecutorService)(a: Par[A]): Future[A] = a(es)
-
-  // def sum(ints: IndexedSeq[Int]): Par[Int] = {
-  //   if (ints.length <= 1) unit(ints.headOption.getOrElse(0))
-  //   else {
-  //     val (l, r) = ints.splitAt(ints.length / 2)
-  //     map2(Par.fork(sum(l)), Par.fork(sum(r)))(_ + _)
-  //   }
-  // }
 
   /*
    The function f does is not evaluated on a separate logical thread.
@@ -86,10 +83,10 @@ object Par {
     }
 
   def equal[A](e: ExecutorService)(p1: Par[A], p2: Par[A]): Boolean =
-    p1(e).get == p2(e).get
+    run(e)(p1) == run(e)(p2)
 
   def map[A, B](pa: Par[A])(f: A => B): Par[B] =
-    (es: ExecutorService) => UnitFuture(f(pa(es).get))
+    (es: ExecutorService) => UnitFuture(f(run(es)(pa)))
 
   def delay[A](fa: => Par[A]): Par[A] =
     es => fa(es)
