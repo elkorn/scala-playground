@@ -85,4 +85,12 @@ object Par {
       Map2Future(af, bf, f)
     }
 
+  def equal[A](e: ExecutorService)(p1: Par[A], p2: Par[A]): Boolean =
+    p1(e).get == p2(e).get
+
+  def map[A, B](pa: Par[A])(f: A => B): Par[B] =
+    (es: ExecutorService) => UnitFuture(f(pa(es).get))
+
+  def delay[A](fa: => Par[A]): Par[A] =
+    es => fa(es)
 }
