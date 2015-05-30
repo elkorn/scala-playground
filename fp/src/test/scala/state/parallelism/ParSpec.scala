@@ -75,4 +75,54 @@ class ParSpec extends FlatSpec with Matchers {
     verifyCorrectFailure(map2(unit(12), unit[Int](throw error))(_ + _))
     verifyCorrectFailure(map(unit[Int](throw error))(_ + 1))
   }
+
+  "choice" should "behave like an if statement" in {
+    Par.run(choice(unit(true))(unit(1), unit(2))) should equal(Success(1))
+    Par.run(choice(unit(false))(unit(1), unit(2))) should equal(Success(2))
+    val error = new RuntimeException("Boo")
+    val expectedFailure = Failure(error)
+    Par.run(choice(unit(false))(unit(1), unit(throw error))).toString() should equal(expectedFailure.toString())
+  }
+
+  "choiceN" should "choose a computation from a list based on a previous result" in {
+    val list = List(unit("a"), unit("b"), unit("c"), unit("d"))
+    def verify(n: Int) =
+      Par.equal(choiceN(unit(n))(list), list(n)) should equal(true)
+
+    (0 to 3) foreach verify
+  }
+
+  "choiceViaChoiceN" should "behave the same as choice" in {
+    Par.equal(choice(unit(true))(unit(1), unit(2)), choiceViaChoiceN(unit(true))(unit(1), unit(2))) should equal(true)
+    Par.equal(choice(unit(false))(unit(1), unit(2)), choiceViaChoiceN(unit(false))(unit(1), unit(2))) should equal(true)
+    val error = new RuntimeException("Boo")
+    val expectedFailure = Failure(error)
+    Par.equal(choice(unit(false))(unit(throw error), unit(2)), choiceViaChoiceN(unit(false))(unit(throw error), unit(2))) should equal(true)
+  }
+
+  "choiceMap" should "select a Par from a Map based on a key" in {
+    val list = List(unit("a"), unit("b"), unit("c"), unit("d"))
+    val map = list.zipWithIndex.map {
+      case (a, i) => i -> a
+    }.toMap
+
+    def verify(n: Int) =
+      Par.equal(choiceN(unit(n))(list), choiceMap(unit(n))(map)) should equal(true)
+
+    (0 to 3) foreach verify
+
+  }
+
+  "chooser" should "choose from anything - working like flatMap" in {
+    val list = List(unit("a"), unit("b"), unit("c"), unit("d"))
+    val keys = List("a", "b", "c", "d")
+    val map = list.zipWithIndex.map {
+      case (a, i) => keys(i) -> a
+    }.toMap
+
+    def verify(n: Int) =
+      Par.equal(chooser(unit(n))(list), chooser(unit(keys(n)))(map)) should equal(true)
+
+    (0 to 3) foreach verify
+  }
 }

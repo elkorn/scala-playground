@@ -10,6 +10,9 @@ package object parallelism {
   type Callback[A] = Try[A] => Unit
 }
 
+/*
+ Refer to https://github.com/fpinscala/fpinscala/blob/master/exercises/src/main/scala/fpinscala/parallelism/Nonblocking.scala for section 7.5 and onwards.
+*/
 sealed trait Future[A] {
   private[parallelism] def apply(k: parallelism.Callback[A]): Unit
 }
@@ -116,6 +119,48 @@ object Par {
         eval(es)(a(es)(cb))
       }
     }
+
+  def choice[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =
+    es => new Future[A] {
+      def apply(cb: Callback[A]) = {
+        cond(es) {
+          case Failure(err) => cb(Failure(err))
+          case Success(true) => eval(es)(t(es)(cb))
+          case Success(false) => eval(es)(f(es)(cb))
+        }
+      }
+    }
+
+  def choiceN[A](selector: Par[Int])(pas: List[Par[A]]): Par[A] =
+    es => new Future[A] {
+      def apply(cb: Callback[A]) = {
+        selector(es) {
+          case Failure(err) => cb(Failure(err))
+          case Success(n) => eval(es)(pas(n)(es)(cb))
+        }
+      }
+    }
+
+  def choiceViaChoiceN[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] = choiceN(map(cond) { case true => 0 case false => 1 })(List(t, f))
+
+  def choiceMap[K, V](selector: Par[K])(map: Map[K, Par[V]]): Par[V] =
+    es => new Future[V] {
+      def apply(cb: Callback[V]) = {
+        selector(es) {
+          case Failure(err) => cb(Failure(err))
+          case Success(k) => eval(es)(map(k)(es)(cb))
+        }
+      }
+    }
+
+  def chooser[K, V](selector: Par[K])(from: K => Par[V]): Par[V] = es => new Future[V] {
+    def apply(cb: Callback[V]) = {
+      selector(es) {
+        case Failure(err) => cb(Failure(err))
+        case Success(k) => eval(es)(from(k)(es)(cb))
+      }
+    }
+  }
 
   private def eval(es: ExecutorService)(r: => Unit): Unit =
     es.submit(new Callable[Unit] { def call = r })
