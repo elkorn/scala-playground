@@ -113,7 +113,7 @@ class ParSpec extends FlatSpec with Matchers {
 
   }
 
-  "chooser" should "choose from anything - working like flatMap" in {
+  "flatMap" should "choose from anything - working like flatMap" in {
     val list = List(unit("a"), unit("b"), unit("c"), unit("d"))
     val keys = List("a", "b", "c", "d")
     val map = list.zipWithIndex.map {
@@ -121,7 +121,7 @@ class ParSpec extends FlatSpec with Matchers {
     }.toMap
 
     def verify(n: Int) =
-      Par.equal(chooser(unit(n))(list), chooser(unit(keys(n)))(map)) should equal(true)
+      Par.equal(flatMap(unit(n))(list), flatMap(unit(keys(n)))(map)) should equal(true)
 
     (0 to 3) foreach verify
   }
