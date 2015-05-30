@@ -4,21 +4,19 @@ import org.scalatest._
 
 import Par._
 import parallelism.Par
+import scala.util.Failure
+import scala.util.Success
 
 class ParSpec extends FlatSpec with Matchers {
-  val defaultExecService = java.util.concurrent.Executors.newFixedThreadPool(3)
-  // "sum" should "sum a sequence of integers" in {
-  //   sum(IndexedSeq(1, 2, 3, 4, 5)) should equal(Par.unit(1 + 2 + 3 + 4 + 5))
+  val defaultExecService = java.util.concurrent.Executors.newFixedThreadPool(1)
 
-  // }
-
-  // "map2" should "map two parallel computations together" in {
-  //   map2(unit(123), unit(44))(_ + _) should equal(unit(123 + 44))
-  // }
+  "map2" should "map two parallel computations together" in {
+    Par.equal(defaultExecService)(map2(unit(123), unit(44))(_ + _), unit(123 + 44)) should equal(true)
+  }
 
   "run" should "run a Par" in {
-    Par.run(defaultExecService)(unit(1)) should equal(1)
-    Par.run(defaultExecService)(unit(2)) should equal(2)
+    Par.run(defaultExecService)(unit(1)) should equal(Success(1))
+    Par.run(defaultExecService)(unit(2)) should equal(Success(2))
   }
 
   "equal" should "test whether the results of two Pars are equal" in {
@@ -28,7 +26,7 @@ class ParSpec extends FlatSpec with Matchers {
 
   "map" should "apply a mapping fn to the result of a Par" in {
     val mapped = Par.map(unit(1))(_ + 1)
-    Par.run(defaultExecService)(mapped) should equal(2)
+    Par.run(defaultExecService)(mapped) should equal(Success(2))
   }
 
   "map" should "uphold the basic mapping laws" in {
@@ -57,7 +55,24 @@ class ParSpec extends FlatSpec with Matchers {
   }
 
   "fork" should "spawn a computation on a separate thread" in {
-    // How to test this properly?
-    Par.run(defaultExecService)(lazyUnit(12)) should equal(12)
+    /*
+     To test this properly:
+        Inject an ExecutorService which uses a custom ThreadFactory for creating the thread pool. Within that factory, trace the thread instantiations.
+
+        ThreadFactory mock = new CustomObservableThreadFactory();
+        ExecutorService executorService = Executors.newCachedThreadPool(mock); 
+     */
+    Par.run(defaultExecService)(lazyUnit(12)) should equal(Success(12))
+  }
+
+  "Par" should "handle exceptions correctly" in {
+    val error = new RuntimeException("Boo")
+    val expectedFailure = Failure(error)
+    def verifyCorrectFailure[A](pa: Par[A]) =
+      Par.run(defaultExecService)(pa).toString() should equal(expectedFailure.toString())
+
+    verifyCorrectFailure(unit(throw error))
+    verifyCorrectFailure(map2(unit(12), unit[Int](throw error))(_ + _))
+    verifyCorrectFailure(map(unit[Int](throw error))(_ + 1))
   }
 }
