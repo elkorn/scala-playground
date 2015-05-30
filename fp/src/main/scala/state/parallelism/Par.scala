@@ -10,9 +10,6 @@ package object parallelism {
   type Callback[A] = Try[A] => Unit
 }
 
-/*
- Refer to https://github.com/fpinscala/fpinscala/blob/master/exercises/src/main/scala/fpinscala/parallelism/Nonblocking.scala for section 7.5 and onwards.
-*/
 sealed trait Future[A] {
   private[parallelism] def apply(k: parallelism.Callback[A]): Unit
 }

@@ -1,5 +1,8 @@
 package fp.state.parallelism
 
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
 import org.scalatest._
 
 import Par._
@@ -55,14 +58,23 @@ class ParSpec extends FlatSpec with Matchers {
   }
 
   "fork" should "spawn a computation on a separate thread" in {
-    /*
-     To test this properly:
-        Inject an ExecutorService which uses a custom ThreadFactory for creating the thread pool. Within that factory, trace the thread instantiations.
+    class CustomObservableThreadFactory() extends ThreadFactory() {
+      private var counter = 0
 
-        ThreadFactory mock = new CustomObservableThreadFactory();
-        ExecutorService executorService = Executors.newCachedThreadPool(mock);
-     */
-    Par.run(lazyUnit(12)) should equal(Success(12))
+      def spawnedThreads = counter
+      override def newThread(r: Runnable): Thread = {
+        counter += 1
+        new Thread(r, s"CustomObservableThreadFactory-$counter")
+      }
+    }
+
+    val mock = new CustomObservableThreadFactory()
+    val executor = Executors.newSingleThreadExecutor(mock)
+
+    Par.run(unit(12))(executor)
+    mock.spawnedThreads should equal(0)
+    Par.run(fork(unit(12)))(executor)
+    mock.spawnedThreads should equal(1)
   }
 
   "Par" should "handle exceptions correctly" in {
