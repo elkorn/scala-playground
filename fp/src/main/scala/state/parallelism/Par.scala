@@ -1,8 +1,7 @@
 package fp.state.parallelism
 
-import java.util.concurrent.{ ExecutorService, Callable, TimeUnit, CountDownLatch }
+import java.util.concurrent.{ Callable, CountDownLatch, ExecutorService }
 import java.util.concurrent.atomic.AtomicReference
-import scala.concurrent.duration._
 
 package object parallelism {
   type Par[A] = ExecutorService => Future[A]
@@ -14,38 +13,7 @@ sealed trait Future[A] {
 
 object Par {
   import parallelism._
-
-  private case class UnitFuture[A](get: A) extends Future[A] {
-    def isDone = true
-    def get(timeout: Long, units: TimeUnit) = apply(a => ())
-    def isCancelled = false
-    def cancel(evenIfRunning: Boolean): Boolean = false
-  }
-
-  private case class Map2Future[A, B, C](fa: Future[A], fb: Future[B], f: (A, B) => C) extends Future[C] {
-    @volatile var cache: Option[C] = None
-
-    def isDone = cache.isDefined
-    def isCancelled = fa.isCancelled || fb.isCancelled
-    def cancel(evenIfRunning: Boolean) =
-      fa.cancel(evenIfRunning) || fa.cancel(evenIfRunning)
-    def get = compute(Long.MaxValue)
-    def get(timeout: Long, unit: TimeUnit): C =
-      compute(TimeUnit.MILLISECONDS.convert(timeout, unit))
-
-    private def compute(timeoutMs: Long): C = cache match {
-      case Some(c) => c
-      case None =>
-        val start = System.currentTimeMillis
-        val ar = fa.get(timeoutMs, TimeUnit.MILLISECONDS)
-        val stop = System.currentTimeMillis
-        val at = stop - start
-        val br = fb.get(timeoutMs - at, TimeUnit.MILLISECONDS)
-        val ret = (f(ar, br))
-        cache = Some(ret)
-        ret
-    }
-  }
+  import fpinscala.parallelism._
 
   def run[A](es: ExecutorService)(pa: Par[A]): A = {
     val ref = new AtomicReference[A]
@@ -53,6 +21,7 @@ object Par {
 
     pa(es) { a =>
       ref.set(a)
+      val previous = latch.getCount()
       latch.countDown
     }
 
@@ -66,7 +35,7 @@ object Par {
     }
   // A derived combinator - one that is expressed wholly in terms of other operations.
   // It does not need to know anything about the representation of Par.
-  def lazyUnit[A](a: => A) = ??? // fork(unit(a))
+  def lazyUnit[A](a: => A): Par[A] = fork(unit(a))
 
   def asyncF[A, B](f: A => B): A => Par[B] =
     a => lazyUnit(f(a))
@@ -76,18 +45,51 @@ object Par {
    To achieve that, one might use fork(map2(a,b)(f)).
    */
   def map2[A, B, C](pa: Par[A], pb: Par[B])(f: (A, B) => C): Par[C] =
-    es => {
-      val af = pa(es)
-      val bf = pb(es)
-      Map2Future(af, bf, f)
+    es => new Future[C] {
+      def apply(cb: C => Unit): Unit = {
+        def process(a: A, b: B): Unit =
+          eval(es)(cb(f(a, b)))
+
+        var ar: Option[A] = None
+        var br: Option[B] = None
+
+        val combiner = Actor[Either[A, B]](es) {
+          case Left(a) => br match {
+            case None => ar = Some(a)
+            case Some(b) => process(a, b)
+          }
+
+          case Right(b) => ar match {
+            case None => br = Some(b)
+            case Some(a) => process(a, b)
+          }
+        }
+
+        pa(es)(a => combiner ! Left(a))
+        pb(es)(b => combiner ! Right(b))
+      }
     }
 
   def equal[A](e: ExecutorService)(p1: Par[A], p2: Par[A]): Boolean =
     run(e)(p1) == run(e)(p2)
 
   def map[A, B](pa: Par[A])(f: A => B): Par[B] =
-    (es: ExecutorService) => UnitFuture(f(run(es)(pa)))
+    (es: ExecutorService) => new Future[B] {
+      def apply(cb: B => Unit): Unit = {
+        pa(es)(a => eval(es)(cb(f(a))))
+      }
+    }
 
   def delay[A](fa: => Par[A]): Par[A] =
     es => fa(es)
+
+  def fork[A](a: => Par[A]): Par[A] =
+    es => new Future[A] {
+      def apply(cb: A => Unit): Unit = {
+        eval(es)(a(es)(cb))
+      }
+    }
+
+  def eval(es: ExecutorService)(r: => Unit): Unit =
+    es.submit(new Callable[Unit] { def call = r })
 }
