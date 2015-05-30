@@ -8,25 +8,25 @@ import scala.util.Failure
 import scala.util.Success
 
 class ParSpec extends FlatSpec with Matchers {
-  val defaultExecService = java.util.concurrent.Executors.newFixedThreadPool(1)
+  implicit val defaultExecService = java.util.concurrent.Executors.newFixedThreadPool(1)
 
   "map2" should "map two parallel computations together" in {
-    Par.equal(defaultExecService)(map2(unit(123), unit(44))(_ + _), unit(123 + 44)) should equal(true)
+    Par.equal(map2(unit(123), unit(44))(_ + _), unit(123 + 44)) should equal(true)
   }
 
   "run" should "run a Par" in {
-    Par.run(defaultExecService)(unit(1)) should equal(Success(1))
-    Par.run(defaultExecService)(unit(2)) should equal(Success(2))
+    Par.run(unit(1)) should equal(Success(1))
+    Par.run(unit(2)) should equal(Success(2))
   }
 
   "equal" should "test whether the results of two Pars are equal" in {
-    Par.equal(defaultExecService)(unit(1), unit(1)) should equal(true)
-    Par.equal(defaultExecService)(unit(1), unit(2)) should equal(false)
+    Par.equal(unit(1), unit(1)) should equal(true)
+    Par.equal(unit(1), unit(2)) should equal(false)
   }
 
   "map" should "apply a mapping fn to the result of a Par" in {
     val mapped = Par.map(unit(1))(_ + 1)
-    Par.run(defaultExecService)(mapped) should equal(Success(2))
+    Par.run(mapped) should equal(Success(2))
   }
 
   "map" should "uphold the basic mapping laws" in {
@@ -34,7 +34,7 @@ class ParSpec extends FlatSpec with Matchers {
     true should equal(true)
 
     def mustBeEqual[A](p1: Par[A], p2: Par[A]) =
-      (Par.equal(defaultExecService)(p1, p2)) should equal(true)
+      Par.equal(p1, p2) should equal(true)
 
     def law1[A](x: A)(f: A => A) =
       mustBeEqual(map(unit(x))(f), unit(f(x)))
@@ -60,16 +60,16 @@ class ParSpec extends FlatSpec with Matchers {
         Inject an ExecutorService which uses a custom ThreadFactory for creating the thread pool. Within that factory, trace the thread instantiations.
 
         ThreadFactory mock = new CustomObservableThreadFactory();
-        ExecutorService executorService = Executors.newCachedThreadPool(mock); 
+        ExecutorService executorService = Executors.newCachedThreadPool(mock);
      */
-    Par.run(defaultExecService)(lazyUnit(12)) should equal(Success(12))
+    Par.run(lazyUnit(12)) should equal(Success(12))
   }
 
   "Par" should "handle exceptions correctly" in {
     val error = new RuntimeException("Boo")
     val expectedFailure = Failure(error)
     def verifyCorrectFailure[A](pa: Par[A]) =
-      Par.run(defaultExecService)(pa).toString() should equal(expectedFailure.toString())
+      Par.run(pa).toString() should equal(expectedFailure.toString())
 
     verifyCorrectFailure(unit(throw error))
     verifyCorrectFailure(map2(unit(12), unit[Int](throw error))(_ + _))

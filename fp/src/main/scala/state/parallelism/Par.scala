@@ -19,7 +19,7 @@ object Par {
   import fpinscala.parallelism._
   import scala.util.Failure
 
-  def run[A](es: ExecutorService)(pa: Par[A]): Try[A] = {
+  def run[A](pa: Par[A])(implicit es: ExecutorService): Try[A] = {
     val ref = new AtomicReference[Try[A]]
     val latch = new CountDownLatch(1)
 
@@ -87,8 +87,8 @@ object Par {
       }
     }
 
-  def equal[A](e: ExecutorService)(p1: Par[A], p2: Par[A]): Boolean =
-    run(e)(p1) == run(e)(p2)
+  def equal[A](p1: Par[A], p2: Par[A])(implicit es: ExecutorService): Boolean =
+    run(p1) == run(p2)
 
   def map[A, B](pa: Par[A])(f: A => B): Par[B] =
     (es: ExecutorService) => new Future[B] {
