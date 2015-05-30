@@ -143,6 +143,26 @@ object Par {
   def choiceMap[K, V](selector: Par[K])(map: Map[K, Par[V]]): Par[V] =
     flatMap(selector)(map)
 
+  def join[A](ppa: Par[Par[A]]): Par[A] =
+    es => new Future[A] {
+      def apply(cb: Callback[A]) = {
+        ppa(es) {
+          case Failure(err) => cb(Failure(err))
+          case Success(pa) => eval(es)(pa(es)(cb))
+        }
+      }
+    }
+
+  // flatMap flattens the Par internally.
+  def joinViaFlatMap[A](ppa: Par[Par[A]]): Par[A] =
+    flatMap(ppa)(x => x)
+
+  def flatMapViaJoin[A, B](pa: Par[A])(f: A => Par[B]): Par[B] =
+    join(map(pa)(f))
+
   private def eval(es: ExecutorService)(r: => Unit): Unit =
     es.submit(new Callable[Unit] { def call = r })
+
+  def map2_fmu[A, B, C](pa: Par[A], pb: Par[B])(f: (A, B) => C): Par[C] =
+    flatMap(pa)(a => flatMap(pb)(b => unit(f(a, b))))
 }

@@ -125,4 +125,25 @@ class ParSpec extends FlatSpec with Matchers {
 
     (0 to 3) foreach verify
   }
+
+  "join" should "flatten a nested Par" in {
+    Par.run(join(unit(unit(1)))) should equal(Success(1))
+  }
+
+  "joinViaFlatMap" should "work the same as join" in {
+    Par.equal(joinViaFlatMap(unit(unit(1))), join(unit(unit(1)))) should equal(true)
+  }
+
+  "flatMapViaJoin" should "work the same as flatMap" in {
+    val list = List(unit("a"), unit("b"), unit("c"), unit("d"))
+
+    def verify(n: Int) =
+      Par.equal(flatMapViaJoin(unit(n))(list), flatMap(unit(n))(list)) should equal(true)
+
+    (0 to 3) foreach verify
+  }
+
+  "map2_fmu" should "work the same as map2" in {
+    Par.equal(map2_fmu(unit(123), unit(44))(_ + _), map2(unit(123), unit(44))(_ + _)) should equal(true)
+  }
 }
