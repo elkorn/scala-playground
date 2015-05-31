@@ -42,8 +42,8 @@ class GenSpec extends FlatSpec with Matchers {
     verifyEqual(unit(13).flatMap(x => unit(x + 7)), unit(20))
   }
 
-  "listOfN" should "support dynamic sizing" in {
-    val list: List[Int] = Gen.choose(0, 5).listOfN(unit(10)).sample.run(gen)._1
+  "listOf" should "support dynamic sizing" in {
+    val list: List[Int] = Gen.choose(0, 5).listOf().apply(10).apply(gen)._1
     def verify(n: Int) =
       {
         n should be < 5

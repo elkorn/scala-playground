@@ -5,7 +5,9 @@ import scala.annotation.tailrec
 import fp.Lazy.Stream
 
 object Gen {
-  def listOf[A](gen: Gen[A]): Gen[List[A]] = ???
+  def listOf[A](gen: Gen[A]): SGen[List[A]] = SGen(listOfN(_, gen))
+
+  def nonEmptyListOf[A](gen: Gen[A]): SGen[List[A]] = SGen(n => listOfN(if (n == 0) 1 else n, gen))
 
   def listOfN[A](n: Int, gen: Gen[A]): Gen[List[A]] = Gen(State(rng => {
     @tailrec
@@ -35,7 +37,7 @@ object Gen {
       s"stack strace:\n${e.getStackTrace().mkString("\n")}"
 
   def forAll[A](a: Gen[A])(f: A => Boolean): Prop = Prop {
-    (n, rng) =>
+    (max, n, rng) =>
       randomStream(a)(rng).zip(Stream.from(0)).take(n).map {
         case (a, i) => try {
           if (f(a)) Passed else Falsified(a.toString, i)
@@ -43,6 +45,19 @@ object Gen {
           case e: Exception => Falsified(buildMsg(a, e), i)
         }
       }.find(_.isFalsified).getOrElse(Passed)
+  }
+
+  def forAll[A](g: SGen[A])(f: A => Boolean): Prop =
+    forAll(g.apply(_))(f)
+
+  def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop {
+    (max, n, rng) =>
+      {
+        val casesPerSize = (n + (max - 1)) / max
+        val props: Stream[Prop] = Stream.from(0).take((n min max) + 1).map(i => forAll(g(i))(f))
+        val finalProp = props.map(p => Prop { (max, _, rng) => p.check(max, casesPerSize, rng) }).toList.reduce(_ && _)
+        finalProp.check(max, n, rng)
+      }
   }
 
   def choose(start: Int, stopExclusive: Int): Gen[Int] =
@@ -92,6 +107,9 @@ case class Gen[A](sample: State[RNG, A]) {
   def unsized: SGen[A] = SGen(_ => this)
 
   def map[B](f: A => B) = Gen.map(this)(f)
+
+  def listOf(): SGen[List[A]] = Gen.listOf(this)
+  def nonEmptyListOf(): SGen[List[A]] = Gen.nonEmptyListOf(this)
 
   val apply = sample.run
 }
