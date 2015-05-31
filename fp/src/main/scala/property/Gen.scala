@@ -2,6 +2,7 @@ package fp.property
 
 import fp.state.{ RNG, State }
 import scala.annotation.tailrec
+import fp.Lazy.Stream
 
 object Gen {
   def listOf[A](gen: Gen[A]): Gen[List[A]] = ???
@@ -25,7 +26,24 @@ object Gen {
     (n < 0, s)
   }))
 
-  def forAll[A](a: Gen[A])(f: A => Boolean): Prop = ???
+  private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
+    Stream.unfold(rng)(rng => Some(g.sample.run(rng)))
+
+  private def buildMsg[A](s: A, e: Exception): String =
+    s"test case: $s\n" +
+      s"generated an exception: ${e.getMessage}\n" +
+      s"stack strace:\n${e.getStackTrace().mkString("\n")}"
+
+  def forAll[A](a: Gen[A])(f: A => Boolean): Prop = Prop {
+    (n, rng) =>
+      randomStream(a)(rng).zip(Stream.from(0)).take(n).map {
+        case (a, i) => try {
+          if (f(a)) Passed else Falsified(a.toString, i)
+        } catch {
+          case e: Exception => Falsified(buildMsg(a, e), i)
+        }
+      }.find(_.isFalsified).getOrElse(Passed)
+  }
 
   def choose(start: Int, stopExclusive: Int): Gen[Int] =
     Gen(State(rng => {
@@ -48,15 +66,20 @@ object Gen {
     Gen(State(RNG.double).flatMap(x => if (x < g1Threshold) g1._1.sample else g2._1.sample))
   }
 
-}
-
-case class Gen[A](sample: State[RNG, A]) {
-  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen(State(rng => {
-    val (a, s1) = this.sample.run(rng)
+  def flatMap[A, B](g: Gen[A])(f: A => Gen[B]): Gen[B] = Gen(State(rng => {
+    val (a, s1) = g.sample.run(rng)
     val (b, s2) = f(a).sample.run(s1)
     (b, s2)
   }))
 
+  def map[A, B](g: Gen[A])(f: A => B): Gen[B] = Gen(State(rng => {
+    val (a, s) = g.sample.run(rng)
+    (f(a), s)
+  }))
+}
+
+case class Gen[A](sample: State[RNG, A]) {
+  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen.flatMap(this)(f)
   def listOfN(n: Int): Gen[List[A]] =
     Gen.listOfN(n, this)
 
@@ -66,4 +89,9 @@ case class Gen[A](sample: State[RNG, A]) {
   def union(other: Gen[A]): Gen[A] =
     Gen.union(this, other)
 
+  def unsized: SGen[A] = SGen(_ => this)
+
+  def map[B](f: A => B) = Gen.map(this)(f)
+
+  val apply = sample.run
 }

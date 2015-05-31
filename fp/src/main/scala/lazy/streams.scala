@@ -97,6 +97,9 @@ sealed trait Stream[+A] {
       case _ => None
     }
 
+  def zip[B](bs: => Stream[B]): Stream[(A, B)] =
+    zipWith(bs)((_, _))
+
   def zipAll[B](bs: => Stream[B]): Stream[(Option[A], Option[B])] =
     Stream.unfold((this, bs)) {
       case (Cons(ha, ta), Cons(hb, tb)) => Some((Some(ha()), Some(hb())), (ta(), tb()))

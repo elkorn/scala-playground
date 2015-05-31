@@ -3,7 +3,7 @@ package fp.property
 import Gen._
 import org.scalatest.{ FlatSpec, Matchers }
 
-class PropertySpec extends FlatSpec with Matchers {
+class GenSpec extends FlatSpec with Matchers {
   val gen = fp.state.SimpleRNG(123L)
   def verifyEqual[A](a1: Gen[A], a2: Gen[A]) =
     a1.sample.run(gen) should equal(a2.sample.run(gen))
