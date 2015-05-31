@@ -40,6 +40,30 @@ object Gen {
       ((a1, a2), s3)
     }))
 
+  def union[A](g1: Gen[A], g2: Gen[A]): Gen[A] =
+    boolean.flatMap(if (_) g1 else g2)
+
+  def weighted[A](g1: (Gen[A], Double), g2: (Gen[A], Double)): Gen[A] = {
+    val g1Threshold = g1._2.abs / (g1._2.abs + g2._2.abs)
+    Gen(State(RNG.double).flatMap(x => if (x < g1Threshold) g1._1.sample else g2._1.sample))
+  }
+
 }
 
-case class Gen[A](sample: State[RNG, A])
+case class Gen[A](sample: State[RNG, A]) {
+  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen(State(rng => {
+    val (a, s1) = this.sample.run(rng)
+    val (b, s2) = f(a).sample.run(s1)
+    (b, s2)
+  }))
+
+  def listOfN(n: Int): Gen[List[A]] =
+    Gen.listOfN(n, this)
+
+  def listOfN(size: Gen[Int]): Gen[List[A]] =
+    size.flatMap(this.listOfN)
+
+  def union(other: Gen[A]): Gen[A] =
+    Gen.union(this, other)
+
+}
