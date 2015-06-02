@@ -4,40 +4,40 @@ import Prop._
 import fp.state.RNG
 import fp.state.RNG
 import fp.state.SimpleRNG
-
-sealed trait Result {
-  def isFalsified: Boolean
-}
-
-case object Passed extends Result {
-  def isFalsified = false
-}
-
-case class Falsified(failure: FailedCase, successes: SuccessCount) extends Result {
-  def isFalsified = true
-}
+import scala.util.Left
+import scala.util.Right
 
 object Prop {
   type SuccessCount = Int
   type FailedCase = String
   type TestCases = Int
   type MaxSize = Int
+  type Result = Either[(FailedCase, TestCases), Status]
+
+  sealed trait Status
+
+  object Status {
+    case object Unfalsified extends Status
+    case object Proven extends Status
+    case object Exhausted extends Status
+  }
 
   def &&(p1: Prop, p2: Prop): Prop = Prop { (max, n, rng) =>
     p1.check(max, n, rng) match {
-      case Passed => p2.check(max, n, rng) match {
-        case Passed => Passed
-        case f: Falsified => f
+      case Right(Status.Unfalsified) => p2.check(max, n, rng) match {
+        case ok @ Right(_) => ok
+        case falsified => falsified
       }
 
-      case f: Falsified => f
+      case proven @ Right(Status.Proven) => proven
+      case falsified => falsified
     }
   }
 
   def ||(p1: Prop, p2: Prop): Prop = Prop { (max, n, rng) =>
     p1.check(max, n, rng) match {
-      case Passed => Passed
-      case Falsified(msg, f) => p2.tag(msg).check(max, n, rng)
+      case ok @ Right(_) => ok
+      case Left((msg, f)) => p2.tag(msg).check(max, n, rng)
     }
   }
 
@@ -47,25 +47,33 @@ object Prop {
     testCases: Int = 100,
     rng: RNG = SimpleRNG(System.currentTimeMillis)
   ): Result = {
-    p.check(maxSize, testCases, rng) match {
-      case f @ Falsified(msg, count) =>
+    val r = p.check(maxSize, testCases, rng)
+    r match {
+      case Left((msg, count)) =>
         println(s"! Falsified after $count passed tests:\n $msg")
-        f
-      case Passed =>
-        println(s"+ OK, passed $testCases tests.")
-        Passed
+
+      case Right(Status.Exhausted) =>
+        println(s"+ OK, $testCases tests did not falsify the property.")
+
+      case Right(Status.Unfalsified) =>
+        println(s"+ OK, passed after $testCases tests.")
+
+      case Right(Status.Proven) =>
+        println(s"+ OK, proved property.")
     }
+
+    r
   }
 }
 
-case class Prop(check: (MaxSize, TestCases, RNG) => Result) {
+case class Prop(check: (MaxSize, TestCases, RNG) => Prop.Result) {
   def &&(p: Prop): Prop = Prop.&&(this, p)
   def ||(p: Prop): Prop = Prop.||(this, p)
   def tag(msg: String): Prop = {
     val originalCheck = check
     Prop((max, n, rng) => originalCheck(max, n, rng) match {
-      case Passed => Passed
-      case Falsified(msg2, n) => Falsified(s"$msg\n$msg2", n)
+      case ok @ Right(Status.Unfalsified | Status.Proven) => ok
+      case falsified @ Left((fail, count)) => Left((s"$msg\n$fail", count))
     })
   }
 }

@@ -1,6 +1,7 @@
 package fp.property
 
 import org.scalatest._
+import fp.property.Prop.Status._
 
 class UsageSpec extends FlatSpec with Matchers {
   import Gen._
@@ -14,7 +15,7 @@ class UsageSpec extends FlatSpec with Matchers {
       }
     }
 
-    Prop.check(maxProp) should equal(Passed)
+    Prop.check(maxProp) should equal(Right(Unfalsified))
   }
 
   "sorted" should "return an ordered list" in {
@@ -32,8 +33,33 @@ class UsageSpec extends FlatSpec with Matchers {
       }
     }
 
-    Prop.check(maxProp) should equal(Passed)
+    Prop.check(maxProp) should equal(Right(Unfalsified))
+  }
+
+  "interleave" should "interleave two streams together according to control stream values" in {
+    import fp.Lazy.Stream
+
+    val s1 = Stream.from(1).take(2)
+    val s2 = Stream.from(6).take(2)
+    val bools = Stream(true, false, false, true)
+
+    Gen.interleave(bools, s1, s2).toList should equal(List(1, 6, 2, 7))
+  }
+
+  "cartesian" should "create a cartesian product of nested streams" in {
+    import fp.Lazy.Stream
+
+    val s = Stream(Stream(1, 2), Stream(3, 4), Stream(5, 6))
+    val expectedResult = Stream(Stream(1, 3, 5), Stream(1, 3, 6), Stream(1, 4, 5), Stream(1, 4, 6), Stream(2, 3, 5), Stream(2, 3, 6), Stream(2, 4, 5), Stream(2, 4, 6))
+
+    def deepList[A](s: Stream[Stream[A]]): List[List[A]] =
+      s.map(_.toList).toList
+
+    deepList(Gen.cartesian(s)) should equal(deepList(expectedResult))
 
   }
 
+  "finite domains" should "allow to prove properties" in {
+
+  }
 }

@@ -74,6 +74,11 @@ object RNG {
 
   }
 
+  def boolean: Rand[Boolean] = rng => {
+    val (a, rng2) = rng.nextInt
+    (a % 2 == 0, rng2)
+  }
+
   def unit[A](a: A): Rand[A] =
     (rng) => (a, rng)
 
