@@ -41,9 +41,9 @@ object Gen {
   def finiteDomain[A](a: Stream[A]): Domain[A] = a map (Some(_))
   def finiteDomain[A](as: A*): Domain[A] = Stream(as: _*) map (Option(_))
 
-  def listOf[A](gen: Gen[A]): SGen[List[A]] = SGen(listOfN(_, gen))
+  def listOf[A](gen: Gen[A]): SGen[List[A]] = Sized(listOfN(_, gen))
 
-  def nonEmptyListOf[A](gen: Gen[A]): SGen[List[A]] = SGen(n => listOfN(if (n == 0) 1 else n, gen))
+  def nonEmptyListOf[A](gen: Gen[A]): SGen[List[A]] = Sized(n => listOfN(if (n == 0) 1 else n, gen))
 
   def listOfN[A](n: Int, gen: Gen[A]): Gen[List[A]] = Gen(State.sequence(List.fill(n)(gen.sample)), cartesian(Stream.constant(gen.domain).take(n)).map(l => fp.errors.Errors.sequence(l.toList)))
 
@@ -89,10 +89,12 @@ object Gen {
             case _ => Right(Status.Unfalsified)
           }
         }
+
         go(0, n / 3, a.domain, _ => Right(Status.Proven)) match {
           case Right((Status.Unfalsified)) =>
             val rands = randomStream(a)(rng).map(Some(_))
             go(n / 3, n, rands, _ => Right(Status.Unfalsified))
+          case provenOrExhausted => provenOrExhausted
         }
 
       }
@@ -172,7 +174,7 @@ case class Gen[A](sample: State[RNG, A], domain: Gen.Domain[A]) {
   def union(other: Gen[A]): Gen[A] =
     Gen.union(this, other)
 
-  def unsized: SGen[A] = SGen(_ => this)
+  def unsized: SGen[A] = Unsized(this)
 
   def map[B](f: A => B) = Gen.map(this)(f)
 

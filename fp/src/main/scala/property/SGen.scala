@@ -1,15 +1,23 @@
 package fp.property
 
-object SGen {
-  def flatMap[A, B](a: SGen[A])(f: A => Gen[B]): SGen[B] = SGen(a.forSize andThen (_ flatMap f))
-
-  def map[A, B](a: SGen[A])(f: A => B): SGen[B] = SGen(a.forSize andThen (_ map f))
-
-  def forAll[A](g: SGen[A])(f: A => Boolean): Prop = ???
+case class Unsized[A](get: Gen[A]) extends SGen[A] {
+  def apply(n: Int) = get
 }
 
-case class SGen[A](forSize: Int => Gen[A]) {
-  def flatMap[B](f: A => Gen[B]): SGen[B] = SGen.flatMap(this)(f)
-  def map[B](f: A => B): SGen[B] = SGen.map(this)(f)
-  val apply = forSize
+case class Sized[A](forSize: Int => Gen[A]) extends SGen[A] {
+  def apply(n: Int) = forSize(n)
+}
+
+trait SGen[A] {
+  def map[B](f: A => B): SGen[B] = this match {
+    case Unsized(g) => Unsized(g map f)
+    case Sized(forSize) => Sized(forSize andThen (_ map f))
+  }
+
+  def flatMap[B](f: A => Gen[B]): SGen[B] = this match {
+    case Unsized(g) => Unsized(g flatMap f)
+    case Sized(forSize) => Sized(forSize andThen (_ flatMap f))
+  }
+
+  def apply(n: Int): Gen[A]
 }
