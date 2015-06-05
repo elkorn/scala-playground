@@ -7,43 +7,23 @@ import fp.Lazy.{ Stream, Cons, Empty }
 import scala.util.Left
 import scala.util.Right
 
-trait Domain[A] {
-  def isFinite: Boolean
-  def isExhausted: Boolean
-}
-
-object Domain {
-  // Stream is sealed - have to deal with that somehow.
-  // A Domain should expose the same methods as a stream and delegate most of its methods to the underlying stream.
-  // Calling the head getter of the stream should return a new Domain of a reduced size.
-  // Also, calling methods from the `take*` and `drop*` family should modify the counter accordingly.
-
-  case object EmptyDomain extends Domain[Nothing] {
-    def isFinite = true
-    def isExhausted = true
-  }
-
-  case class FiniteDomain[A](size: Int, s: Stream[A]) extends Domain[A] {
-    def isFinite = true
-    def isExhausted = size == 0
-  }
-
-  case class InfiniteDomain[A](s: Stream[A]) extends Domain[A] {
-    def isFinite = false
-    def isExhausted = false
-  }
-}
-
 object Gen {
-  import Prop.Result
+  object Result {
+    val Proven: Prop.Result = Right(Prop.Status.Proven)
+    val Unfalsified: Prop.Result = Right(Prop.Status.Unfalsified)
+    val Exhausted: Prop.Result = Right(Prop.Status.Exhausted)
+    def Falsified(failedCase: Prop.FailedCase, successCount: Prop.SuccessCount): Prop.Result =
+      Left((failedCase, successCount))
+  }
+
   type Domain[A] = Stream[Option[A]]
   val infiniteDomain: Domain[Nothing] = Stream(None)
   def finiteDomain[A](a: Stream[A]): Domain[A] = a map (Some(_))
   def finiteDomain[A](as: A*): Domain[A] = Stream(as: _*) map (Option(_))
 
-  def listOf[A](gen: Gen[A]): SGen[List[A]] = Sized(listOfN(_, gen))
+  def listOf[A](gen: Gen[A]): SizedGen[List[A]] = Sized(listOfN(_, gen))
 
-  def nonEmptyListOf[A](gen: Gen[A]): SGen[List[A]] = Sized(n => listOfN(if (n == 0) 1 else n, gen))
+  def nonEmptyListOf[A](gen: Gen[A]): SizedGen[List[A]] = Sized(n => listOfN(if (n == 0) 1 else n, gen))
 
   def listOfN[A](n: Int, gen: Gen[A]): Gen[List[A]] = Gen(State.sequence(List.fill(n)(gen.sample)), cartesian(Stream.constant(gen.domain).take(n)).map(l => fp.errors.Errors.sequence(l.toList)))
 
@@ -60,6 +40,8 @@ object Gen {
 
   def boolean: Gen[Boolean] = Gen(State(RNG.boolean), finiteDomain(true, false))
 
+  def byte: Gen[Byte] = Gen(State(RNG.int).map(x => (x % 256).toByte), finiteDomain(Stream.from(0).take(255).map(_.toByte)))
+
   private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
     Stream.unfold(rng)(rng => Some(g.sample.run(rng)))
 
@@ -69,47 +51,52 @@ object Gen {
       s"stack strace:\n${e.getStackTrace().mkString("\n")}"
 
   def forAll[A](a: Gen[A])(f: A => Boolean): Prop = Prop {
-    (max, n, rng) =>
+    (_, n, rng) =>
       {
-        import fp.property.Prop.Status
-
-        def go(cur: Int, end: Int, domain: Stream[Option[A]], onEnd: Int => Result): Result = {
-          if (cur == end) Right(Status.Unfalsified)
+        def go(cur: Int, end: Int, domain: Domain[A], onDomainExhausted: Prop.Result): Prop.Result = {
+          // println(s"Testing $cur/$end")
+          if (cur == end) Result.Unfalsified
           else domain match {
             case Cons(hf, t) => hf() match {
               case Some(h) => try {
+                // println(s"${domain.take(10).toList}")
                 // TODO: This is pretty arbitrary. Create a proper Domain abstraction that wraps a Stream and holds the information abount
-                if (f(h)) go(cur + 1, end, t(), onEnd)
-                else Left((h.toString(), cur))
+                if (f(h)) go(cur + 1, end, t(), onDomainExhausted)
+                else Result.Falsified(h.toString(), cur)
               } catch {
-                case e: Exception => Left((buildMsg(h, e), cur))
+                case e: Exception => Result.Falsified(buildMsg(h, e), cur)
               }
-              case None => onEnd(cur)
+
+              case None => Result.Unfalsified
             }
-            case _ => Right(Status.Unfalsified)
+
+            case _ => onDomainExhausted
           }
         }
 
-        go(0, n / 3, a.domain, _ => Right(Status.Proven)) match {
-          case Right((Status.Unfalsified)) =>
+        go(0, n / 3, a.domain, Result.Proven) match {
+          case Result.Unfalsified =>
             val rands = randomStream(a)(rng).map(Some(_))
-            go(n / 3, n, rands, _ => Right(Status.Unfalsified))
+            go(n / 3, n, rands, Result.Unfalsified)
           case provenOrExhausted => provenOrExhausted
         }
-
       }
   }
 
-  def forAll[A](g: SGen[A])(f: A => Boolean): Prop =
+  def forAll[A](g: SizedGen[A])(f: A => Boolean): Prop =
     forAll(g.apply(_))(f)
 
   def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop {
     (max, n, rng) =>
       {
-        val casesPerSize = (n + (max - 1)) / max
-        val props: Stream[Prop] = Stream.from(0).take((n min max) + 1).map(i => forAll(g(i))(f))
-        val finalProp = props.map(p => Prop { (max, _, rng) => p.check(max, casesPerSize, rng) }).toList.reduce(_ && _)
-        finalProp.check(max, n, rng)
+        val casesPerSize = n / max + 1
+        println(s"Using $casesPerSize cases per size")
+        val props: Stream[Prop] = Stream.from(0).take(max + 1).map(i => forAll(g(i))(f))
+        val finalProp = props.map(p => Prop((max, _, rng) => p.check(max, casesPerSize, rng))).toList.reduce(_ && _)
+        finalProp.check(max, n, rng).right.map {
+          case Prop.Status.Proven => Prop.Status.Exhausted
+          case x => x
+        }
       }
   }
 
@@ -174,12 +161,12 @@ case class Gen[A](sample: State[RNG, A], domain: Gen.Domain[A]) {
   def union(other: Gen[A]): Gen[A] =
     Gen.union(this, other)
 
-  def unsized: SGen[A] = Unsized(this)
+  def unsized: SizedGen[A] = Unsized(this)
 
   def map[B](f: A => B) = Gen.map(this)(f)
 
-  def listOf(): SGen[List[A]] = Gen.listOf(this)
-  def nonEmptyListOf(): SGen[List[A]] = Gen.nonEmptyListOf(this)
+  def listOf(): SizedGen[List[A]] = Gen.listOf(this)
+  def nonEmptyListOf(): SizedGen[List[A]] = Gen.nonEmptyListOf(this)
 
   val apply = sample.run
 }
