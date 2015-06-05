@@ -1,4 +1,4 @@
-package fp.property
+package fp.property.domain
 
 import org.scalatest._
 import fp.Lazy.Stream
@@ -29,6 +29,14 @@ class DomainSpec extends FlatSpec with Matchers {
     new FiniteDomain(List(1, 2, 3)).tail.size should equal(2)
   }
 
+  "FiniteDomain" should "be mappable" in {
+    new FiniteDomain(List(1, 2, 3)).map(_ + 12).head() should equal(13)
+  }
+
+  "FiniteDomain" should "be flatmappable" in {
+    new FiniteDomain(List(1, 2, 3)).flatMap(x => List(x + 12)).head() should equal(13)
+  }
+
   "InfiniteDomain" should "accept a stream" in {
     // It works if it compiles.
     new InfiniteDomain(Stream.from(0))
@@ -50,6 +58,14 @@ class DomainSpec extends FlatSpec with Matchers {
     }
   }
 
+  "InfiniteDomain" should "be mappable" in {
+    new InfiniteDomain(Stream.from(0)).map(_ + 12).head() should equal(12)
+  }
+
+  "InfiniteDomain" should "be flatmappable" in {
+    new InfiniteDomain(Stream.from(0)).flatMap(x => Stream(x + 12)).head() should equal(12)
+  }
+
   "InfiniteDomain" should "throw errors when built on finite streams" in {
     val domain = new InfiniteDomain(Stream(1))
     a[RuntimeException] should be thrownBy (domain.tail)
@@ -61,7 +77,6 @@ class DomainSpec extends FlatSpec with Matchers {
 
     domain match {
       case Domain(h, tail) =>
-      case _ => fail("???")
     }
   }
 
@@ -70,8 +85,7 @@ class DomainSpec extends FlatSpec with Matchers {
     val domain = new FiniteDomain(List(1, 2, 3))
 
     domain match {
-      case FiniteDomain(h, tailDomain) =>
-      case _ => fail("???")
+      case FiniteDomain(h, tailDomain) => h().isInstanceOf[Int] should be(true)
     }
   }
 
@@ -96,7 +110,6 @@ class DomainSpec extends FlatSpec with Matchers {
 
     domain match {
       case InfiniteDomain(h, tailDomain) =>
-      case _ => fail("???")
     }
   }
 }
