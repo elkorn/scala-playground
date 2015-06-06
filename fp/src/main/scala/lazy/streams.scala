@@ -179,4 +179,8 @@ object Stream {
 
   def ones2(): Stream[Int] = constant2(1)
 
+  def map2[A, B, C](sa: Stream[A], sb: Stream[B])(f: (A, B) => C): Stream[C] = for {
+    a <- sa
+    b <- sb
+  } yield f(a, b)
 }

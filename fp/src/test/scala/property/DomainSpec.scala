@@ -34,7 +34,32 @@ class DomainSpec extends FlatSpec with Matchers {
   }
 
   "FiniteDomain" should "be flatmappable" in {
-    new FiniteDomain(List(1, 2, 3)).flatMap(x => List(x + 12)).head() should equal(13)
+    val mapped = new FiniteDomain(List(1, 2, 3)).flatMap(x => FiniteDomain(x + 12))
+    mapped head () should equal(13)
+    mapped.tail.head() should equal(14)
+    mapped.tail.tail.head() should equal(15)
+  }
+
+  "FiniteDomain" should "have a cartesian product" in {
+    val input = FiniteDomain(
+      FiniteDomain(1, 2),
+      FiniteDomain(3, 4),
+      FiniteDomain(5, 6)
+    )
+    val expected = FiniteDomain(
+      FiniteDomain(1, 3, 5),
+      FiniteDomain(1, 3, 6),
+      FiniteDomain(1, 4, 5),
+      FiniteDomain(1, 4, 6),
+      FiniteDomain(2, 3, 5),
+      FiniteDomain(2, 3, 6),
+      FiniteDomain(2, 4, 5),
+      FiniteDomain(2, 4, 6)
+    )
+
+    def deepToList[A](domain: FiniteDomain[FiniteDomain[A]]) = domain.as.map(_.as)
+
+    deepToList(FiniteDomain.cartesian(input)) should equal(deepToList(expected))
   }
 
   "InfiniteDomain" should "accept a stream" in {
@@ -63,12 +88,33 @@ class DomainSpec extends FlatSpec with Matchers {
   }
 
   "InfiniteDomain" should "be flatmappable" in {
-    new InfiniteDomain(Stream.from(0)).flatMap(x => Stream(x + 12)).head() should equal(12)
+    val mapped = new InfiniteDomain(Stream.from(1)).flatMap(x => InfiniteDomain(Stream(x + 12)))
+    mapped head () should equal(13)
+    mapped.tail.head() should equal(14)
+    mapped.tail.tail.head() should equal(15)
   }
 
   "InfiniteDomain" should "throw errors when built on finite streams" in {
     val domain = new InfiniteDomain(Stream(1))
     a[RuntimeException] should be thrownBy (domain.tail)
+  }
+
+  "InfiniteDomain" should "have a cartesian product" in {
+    import fp.Lazy.Stream
+    def deepToList[A](s: Stream[Stream[A]]): List[List[A]] =
+      s.map(_.toList).toList
+    val s = InfiniteDomain(
+      Stream(
+        InfiniteDomain(Stream(1, 2)),
+        InfiniteDomain(Stream(3, 4)),
+        InfiniteDomain(Stream(5, 6))
+      )
+    )
+    val expected = Stream(Stream(1, 3, 5), Stream(1, 3, 6), Stream(1, 4, 5), Stream(1, 4, 6), Stream(2, 3, 5), Stream(2, 3, 6), Stream(2, 4, 5), Stream(2, 4, 6))
+
+    val actual = InfiniteDomain.cartesian(s).as.take(8).map(_.as.take(3))
+
+    deepToList(actual) should equal(deepToList(expected))
   }
 
   "Domain" should "be extractable" in {
