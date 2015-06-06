@@ -29,8 +29,9 @@ private[domain] class FiniteDomain[+A](private[domain] val as: Stream[A], privat
 }
 
 object FiniteDomain {
-  def unapply[A](domain: FiniteDomain[A]) = if (domain.tail.isExhausted) Some((domain.head, EmptyDomain))
-  else Domain.unapply(domain)
+  def unapply[A](domain: FiniteDomain[A]) =
+    if (domain.size == 1) Some((domain.head, EmptyDomain))
+    else Domain.unapply(domain)
 
   def apply[A](as: List[A]) = new FiniteDomain(Stream(as: _*), as.length)
   def map2[A, B, C](da: FiniteDomain[A], db: FiniteDomain[B])(f: (A, B) => C): FiniteDomain[C] = for {

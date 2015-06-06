@@ -6,7 +6,7 @@ import scala.annotation.tailrec
 import fp.Lazy.{ Stream, Cons, Empty }
 import scala.util.Left
 import scala.util.Right
-import domain.{ Domain, FiniteDomain, InfiniteDomain }
+import domain.{ Domain, FiniteDomain, InfiniteDomain, EmptyDomain }
 
 object Gen {
   object Result {
@@ -53,12 +53,16 @@ object Gen {
             } catch {
               case e: Exception => Result.Falsified(buildMsg(h, e), cur)
             }
-          domain match {
-            case x @ FiniteDomain(hf, t) =>
-              // Take the cur and end values only if the number of test cases is smaller than the domain size.
-              if (n < x.size && cur == end) Result.Unfalsified
-              else check(hf(), t)
-            case x @ InfiniteDomain(hf, t) => check(hf(), t)
+
+          if (domain.isExhausted) onDomainExhausted
+          else {
+            domain match {
+              case x @ FiniteDomain(hf, t) =>
+                // Take the cur and end values only if the number of test cases is smaller than the domain size.
+                if (n < x.size && cur == end) Result.Unfalsified
+                else check(hf(), t)
+              case x @ InfiniteDomain(hf, t) => check(hf(), t)
+            }
           }
         }
 
@@ -120,13 +124,14 @@ object Gen {
 
   // TODO refactor to a more intelligent solution
   def interleave[A](ctrl: Domain[Boolean], s1: Domain[A], s2: Domain[A]): Domain[A] = ctrl match {
-    case FiniteDomain(hf, _) => hf() match {
+    case EmptyDomain => EmptyDomain
+    case FiniteDomain(hf, tail) => hf() match {
       case true => s1 match {
-        case x @ FiniteDomain(h, t) if !x.isExhausted => FiniteDomain(interleave(ctrl tail, t, s2).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
+        case x @ FiniteDomain(h, t) if !x.isExhausted => FiniteDomain(interleave(tail, t, s2).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
         case _ => s2
       }
       case false => s2 match {
-        case x @ Domain(h, t) if !x.isExhausted => FiniteDomain(interleave(ctrl tail, t, s1).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
+        case x @ Domain(h, t) if !x.isExhausted => FiniteDomain(interleave(tail, t, s1).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
         case _ => s1
       }
     }

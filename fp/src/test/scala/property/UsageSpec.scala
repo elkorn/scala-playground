@@ -4,6 +4,7 @@ import org.scalatest._
 
 class UsageSpec extends FlatSpec with Matchers {
   import Gen._
+  import fp.property.domain.FiniteDomain
 
   val domain = choose(-10, 10)
   "max" should "return the maximum value from a list" in {
@@ -14,36 +15,35 @@ class UsageSpec extends FlatSpec with Matchers {
       }
     }
 
-    Prop.check(maxProp) should equal(Result.Unfalsified)
+    Prop.check(maxProp) should equal(Result.Exhausted)
   }
 
-  // "sorted" should "return an ordered list" in {
-  //   val maxProp = forAll(nonEmptyListOf(domain)) { ns =>
-  //     {
-  //       val sorted = ns.sorted
-  //       val a =
-  //         (ns.isEmpty || sorted.tail.isEmpty || !sorted.zip(sorted.tail).exists {
-  //           case (a, b) => a > b
-  //         })
-  //       val b = !ns.exists(!sorted.contains(_))
-  //       val c = !sorted.exists(!ns.contains(_))
+  "sorted" should "return an ordered list" in {
+    val maxProp = forAll(nonEmptyListOf(domain)) { ns =>
+      {
+        val sorted = ns.sorted
+        val a =
+          (ns.isEmpty || sorted.tail.isEmpty || !sorted.zip(sorted.tail).exists {
+            case (a, b) => a > b
+          })
+        val b = !ns.exists(!sorted.contains(_))
+        val c = !sorted.exists(!ns.contains(_))
 
-  //       a && b && c
-  //     }
-  //   }
+        a && b && c
+      }
+    }
 
-  //   Prop.check(maxProp) should equal(Result.Unfalsified)
-  // }
+    Prop.check(maxProp) should equal(Result.Exhausted)
+  }
 
-  // "interleave" should "interleave two streams together according to control stream values" in {
-  //   import fp.Lazy.Stream
+  "interleave" should "interleave two streams together according to control stream values" in {
+    import fp.Lazy.Stream
 
-  //   val s1 = Stream.from(1).take(2)
-  //   val s2 = Stream.from(6).take(2)
-  //   val bools = Stream(true, false, false, true)
-
-  //   Gen.interleave(bools, s1, s2).toList should equal(List(1, 6, 2, 7))
-  // }
+    val s1 = FiniteDomain(Stream.from(1).take(5).toList)
+    val s2 = FiniteDomain(Stream.from(6).take(5).toList)
+    val bools = FiniteDomain(List(true, false, false, true))
+    Gen.interleave(bools, s1, s2).finite.toList should equal(List(1, 6, 2, 7))
+  }
 
   // "cartesian" should "create a cartesian product of nested streams" in {
   //   import fp.Lazy.Stream
