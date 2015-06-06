@@ -1,166 +1,185 @@
-// package fp.property
+package fp.property
 
-// import fp.state.SimpleRNG
-// import fp.state.{ RNG, State }
-// import scala.annotation.tailrec
-// import fp.Lazy.{ Stream, Cons, Empty }
-// import scala.util.Left
-// import scala.util.Right
-// import domain.Domain._
-// import domain.Domain
+import fp.state.SimpleRNG
+import fp.state.{ RNG, State }
+import scala.annotation.tailrec
+import fp.Lazy.{ Stream, Cons, Empty }
+import scala.util.Left
+import scala.util.Right
+import domain.{ Domain, FiniteDomain, InfiniteDomain }
 
-// object Gen {
-//   object Result {
-//     val Proven: Prop.Result = Right(Prop.Status.Proven)
-//     val Unfalsified: Prop.Result = Right(Prop.Status.Unfalsified)
-//     val Exhausted: Prop.Result = Right(Prop.Status.Exhausted)
-//     def Falsified(failedCase: Prop.FailedCase, successCount: Prop.SuccessCount): Prop.Result =
-//       Left((failedCase, successCount))
-//   }
+object Gen {
+  object Result {
+    val Proven: Prop.Result = Right(Prop.Status.Proven)
+    val Unfalsified: Prop.Result = Right(Prop.Status.Unfalsified)
+    val Exhausted: Prop.Result = Right(Prop.Status.Exhausted)
+    def Falsified(failedCase: Prop.FailedCase, successCount: Prop.SuccessCount): Prop.Result =
+      Left((failedCase, successCount))
+  }
 
-//   def listOf[A](gen: Gen[A]): SizedGen[List[A]] = Sized(listOfN(_, gen))
+  def listOf[A](gen: Gen[A]): SizedGen[List[A]] = Sized(listOfN(_, gen))
 
-//   def nonEmptyListOf[A](gen: Gen[A]): SizedGen[List[A]] = Sized(n => listOfN(if (n == 0) 1 else n, gen))
+  def nonEmptyListOf[A](gen: Gen[A]): SizedGen[List[A]] = Sized(n => listOfN(if (n == 0) 1 else n, gen))
 
-//   def listOfN[A](n: Int, gen: Gen[A]): Gen[List[A]] = Gen(State.sequence(List.fill(n)(gen.sample)), cartesian(gen.domain.map(_ => gen.domain).take(n)))
+  // TODO: Work with InfiniteDomain[FiniteDomain[A]] and FiniteDomain[FiniteDomain[A]] only - sized lists are to be generated here - so the length must be finite.
+  def listOfN[A](n: Int, gen: Gen[A]): Gen[List[A]] = {
+    val stream = gen.domain.foldRight(Stream[A]())(Stream.cons(_, _))
+    val streamDomain = Domain.cartesian(FiniteDomain(stream.map(_ => stream).take(n).toList))
+    Gen(State.sequence(List.fill(n)(gen.sample)), streamDomain.map(_.toList))
+  }
 
-//   def map2Stream[A, B, C](sa: Stream[A], sb: Stream[B])(f: (A, B) => C): Stream[C] = for {
-//     a <- sa
-//     b <- sb
-//   } yield f(a, b)
+  def unit[A](a: A): Gen[A] = Gen(State.unit(a), FiniteDomain(List(a)))
 
-//   def cartesian[A](s: Domain[Domain[A]]): Domain[Domain[A]] = {
-//     s.foldRight(Stream(Stream[A]()))((h, t) => map2Stream(h, t)(Stream.cons(_, _)))
-//   }
+  def boolean: Gen[Boolean] = Gen(State(RNG.boolean), FiniteDomain(List(true, false)))
 
-//   def unit[A](a: A): Gen[A] = Gen(State.unit(a), FiniteDomain(a))
+  def byte: Gen[Byte] = Gen(State(RNG.int).map(x => (x % 256).toByte), FiniteDomain(Stream.from(0).take(255).map(_.toByte).toList))
 
-//   def boolean: Gen[Boolean] = Gen(State(RNG.boolean), FiniteDomain(true, false))
+  private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
+    Stream.unfold(rng)(rng => Some(g.sample.run(rng)))
 
-//   def byte: Gen[Byte] = Gen(State(RNG.int).map(x => (x % 256).toByte), FiniteDomain(Stream.from(0).take(255).map(_.toByte).toList))
+  private def buildMsg[A](s: A, e: Exception): String =
+    s"test case: $s\n" +
+      s"generated an exception: ${e.getMessage}\n" +
+      s"stack strace:\n${e.getStackTrace().mkString("\n")}"
 
-//   private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
-//     Stream.unfold(rng)(rng => Some(g.sample.run(rng)))
+  def forAll[A](a: Gen[A])(f: A => Boolean): Prop = Prop {
+    (_, n, rng) =>
+      {
+        def go(cur: Int, end: Int, domain: Domain[A], onDomainExhausted: Prop.Result): Prop.Result = {
+          def check(h: A, t: Domain[A]): Prop.Result =
+            try {
+              if (f(h)) go(cur + 1, end, t, onDomainExhausted)
+              else Result.Falsified(h.toString(), cur)
+            } catch {
+              case e: Exception => Result.Falsified(buildMsg(h, e), cur)
+            }
+          domain match {
+            case x @ FiniteDomain(hf, t) =>
+              // Take the cur and end values only if the number of test cases is smaller than the domain size.
+              if (n < x.size && cur == end) Result.Unfalsified
+              else check(hf(), t)
+            case x @ InfiniteDomain(hf, t) => check(hf(), t)
+          }
+        }
 
-//   private def buildMsg[A](s: A, e: Exception): String =
-//     s"test case: $s\n" +
-//       s"generated an exception: ${e.getMessage}\n" +
-//       s"stack strace:\n${e.getStackTrace().mkString("\n")}"
+        // TODO this can be done more cleanly since we have domain size support.
+        go(0, n / 3, a.domain, Result.Proven) match {
+          case Result.Unfalsified =>
+            val rands = InfiniteDomain(randomStream(a)(rng))
+            go(n / 3, n, rands, Result.Unfalsified)
+          case provenOrExhausted => provenOrExhausted
+        }
+      }
+  }
 
-//   def forAll[A](a: Gen[A])(f: A => Boolean): Prop = Prop {
-//     (_, n, rng) =>
-//       {
-//         def go(cur: Int, end: Int, domain: Domain[A], onDomainExhausted: Prop.Result): Prop.Result = {
-//           def check(h: A, t: Domain[A]): Prop.Result =
-//             try {
-//               if (f(h)) go(cur + 1, end, t, onDomainExhausted)
-//               else Result.Falsified(h.toString(), cur)
-//             } catch {
-//               case e: Exception => Result.Falsified(buildMsg(h, e), cur)
-//             }
-//           domain match {
-//             case x @ FiniteDomain(hf, t) =>
-//               // Take the cur and end values only if the number of test cases is smaller than the domain size.
-//               if (n < x.size && cur == end) Result.Unfalsified
-//               else check(hf(), t)
-//             case x @ InfiniteDomain(hf, t) => check(hf(), t)
-//           }
-//         }
+  def forAll[A](g: SizedGen[A])(f: A => Boolean): Prop =
+    forAll(g.apply(_))(f)
 
-//         // TODO this can be done more cleanly since we have domain size support.
-//         go(0, n / 3, a.domain, Result.Proven) match {
-//           case Result.Unfalsified =>
-//             val rands = InfiniteDomain(randomStream(a)(rng))
-//             go(n / 3, n, rands, Result.Unfalsified)
-//           case provenOrExhausted => provenOrExhausted
-//         }
-//       }
-//   }
+  def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop {
+    (max, n, rng) =>
+      {
+        val casesPerSize = n / max + 1
+        println(s"Using $casesPerSize cases per size")
+        val props: Stream[Prop] = Stream.from(0).take(max + 1).map(i => forAll(g(i))(f))
+        val finalProp = props.map(p => Prop((max, _, rng) => p.check(max, casesPerSize, rng))).toList.reduce(_ && _)
+        finalProp.check(max, n, rng).right.map {
+          case Prop.Status.Proven => Prop.Status.Exhausted
+          case x => x
+        }
+      }
+  }
 
-//   def forAll[A](g: SizedGen[A])(f: A => Boolean): Prop =
-//     forAll(g.apply(_))(f)
+  def choose(start: Int, stopExclusive: Int): Gen[Int] =
+    Gen(
+      State(RNG.nonNegativeInt).map(n => start + n % (stopExclusive - start)),
+      FiniteDomain((start to (stopExclusive - start)).toList)
+    )
 
-//   def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop {
-//     (max, n, rng) =>
-//       {
-//         val casesPerSize = n / max + 1
-//         println(s"Using $casesPerSize cases per size")
-//         val props: Stream[Prop] = Stream.from(0).take(max + 1).map(i => forAll(g(i))(f))
-//         val finalProp = props.map(p => Prop((max, _, rng) => p.check(max, casesPerSize, rng))).toList.reduce(_ && _)
-//         finalProp.check(max, n, rng).right.map {
-//           case Prop.Status.Proven => Prop.Status.Exhausted
-//           case x => x
-//         }
-//       }
-//   }
+  def choosePair(start: Int, stopExclusive: Int): Gen[(Int, Int)] =
+    zip(choose(start, stopExclusive), choose(start, stopExclusive))((_, _))
 
-//   def choose(start: Int, stopExclusive: Int): Gen[Int] =
-//     Gen(
-//       State(RNG.nonNegativeInt).map(n => start + n % (stopExclusive - start)),
-//       FiniteDomain((start to (stopExclusive - start)).toList)
-//     )
+  def union[A](g1: Gen[A], g2: Gen[A]): Gen[A] =
+    boolean.flatMap(if (_) g1 else g2)
 
-//   def choosePair(start: Int, stopExclusive: Int): Gen[(Int, Int)] =
-//     zip(choose(start, stopExclusive), choose(start, stopExclusive))((_, _))
+  // def interleave[A](s1: Stream[A], s2: Stream[A]): Stream[A] =
+  //   s1.append(s2)
+  // s1.zipAll(s2) flatMap {
+  //   case (a1, a2) => Stream((a1.toList ++ a2.toList): _*)
+  // }
 
-//   def union[A](g1: Gen[A], g2: Gen[A]): Gen[A] =
-//     boolean.flatMap(if (_) g1 else g2)
+  def uniform: Gen[Double] = Gen(State(RNG.double), InfiniteDomain(Stream.from(0).map(_.toDouble)))
+  def weighted[A](g1: (Gen[A], Double), g2: (Gen[A], Double)): Gen[A] = {
+    val g1Threshold = g1._2.abs / (g1._2.abs + g2._2.abs)
+    def distribution: Domain[Boolean] = InfiniteDomain(randomStream(uniform.map(_ < g1Threshold))(SimpleRNG(12345L)))
 
-//   // def interleave[A](s1: Stream[A], s2: Stream[A]): Stream[A] =
-//   //   s1.append(s2)
-//   // s1.zipAll(s2) flatMap {
-//   //   case (a1, a2) => Stream((a1.toList ++ a2.toList): _*)
-//   // }
+    Gen(
+      State(RNG.double).flatMap(x => if (x < g1Threshold) g1._1.sample else g2._1.sample),
+      interleave(distribution, g1._1.domain, g2._1.domain)
+    )
+  }
 
-//   def uniform: Gen[Double] = Gen(State(RNG.double), InfiniteDomain(Stream.from(0)))
-//   def weighted[A](g1: (Gen[A], Double), g2: (Gen[A], Double)): Gen[A] = {
-//     val g1Threshold = g1._2.abs / (g1._2.abs + g2._2.abs)
-//     def distribution: Stream[Boolean] = randomStream(uniform.map(_ < g1Threshold))(SimpleRNG(12345L))
+  // TODO refactor to a more intelligent solution
+  def interleave[A](ctrl: Domain[Boolean], s1: Domain[A], s2: Domain[A]): Domain[A] = ctrl match {
+    case FiniteDomain(hf, _) => hf() match {
+      case true => s1 match {
+        case x @ FiniteDomain(h, t) if !x.isExhausted => FiniteDomain(interleave(ctrl tail, t, s2).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
+        case _ => s2
+      }
+      case false => s2 match {
+        case x @ Domain(h, t) if !x.isExhausted => FiniteDomain(interleave(ctrl tail, t, s1).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
+        case _ => s1
+      }
+    }
 
-//     Gen(State(RNG.double).flatMap(x => if (x < g1Threshold) g1._1.sample else g2._1.sample), interleave(distribution, g1._1.domain, g2._1.domain))
-//   }
+    case InfiniteDomain(hf, _) => hf() match {
+      case true => s1 match {
+        case x @ FiniteDomain(h, t) if !x.isExhausted => FiniteDomain(interleave(ctrl tail, t, s2).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
+        case x @ InfiniteDomain(h, t) if !x.isExhausted => InfiniteDomain(interleave(ctrl tail, t, s2).foldRight(Stream(h()))(Stream.cons(_, _)))
+        case _ => s2
+      }
 
-//   def interleave[A](ctrl: Stream[Boolean], s1: Stream[A], s2: Stream[A]): Stream[A] = ctrl.headOption map {
-//     case true => s1 match {
-//       case Cons(h, t) => Stream.cons(h(), interleave(ctrl drop 1, t(), s2))
-//       case _ => s2
-//     }
-//     case false => s2 match {
-//       case Cons(h, t) => Stream.cons(h(), interleave(ctrl drop 1, t(), s1))
-//       case _ => s1
-//     }
-//   } getOrElse Stream.empty
+      case false => s2 match {
+        case x @ FiniteDomain(h, t) if !x.isExhausted => FiniteDomain(interleave(ctrl tail, t, s1).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
+        case x @ InfiniteDomain(h, t) if !x.isExhausted => InfiniteDomain(interleave(ctrl tail, t, s1).foldRight(Stream(h()))(Stream.cons(_, _)))
+        case _ => s1
+      }
+    }
+  }
 
-//   def zip[A, B, C](ga: Gen[A], gb: Gen[B])(f: (A, B) => C): Gen[C] = for {
-//     a <- ga
-//     b <- gb
-//   } yield f(a, b)
+  def zip[A, B, C](ga: Gen[A], gb: Gen[B])(f: (A, B) => C): Gen[C] = for {
+    a <- ga
+    b <- gb
+  } yield f(a, b)
 
-//   def flatMap[A, B](g: Gen[A])(f: A => Gen[B]): Gen[B] = Gen(g.sample.flatMap(a => f(a).sample), g.domain.flatMap {
-//     case None => InfiniteDomain
-//     case Some(a) => f(a).domain
-//   })
+  def flatMap[A, B](g: Gen[A])(f: A => Gen[B]): Gen[B] =
+    Gen(
+      g.sample.flatMap(a => f(a).sample),
+      g.domain match {
+        case x @ FiniteDomain(_, _) => x.flatMap(x => f(x).domain.finite)
+        case x @ InfiniteDomain(_, _) => x.flatMap(x => f(x).domain.infinite)
+      }
+    )
 
-//   def map[A, B](g: Gen[A])(f: A => B): Gen[B] = Gen(g.sample.map(f), g.domain.map(_.map(f)))
-// }
+  def map[A, B](g: Gen[A])(f: A => B): Gen[B] = Gen(g.sample.map(f), g.domain.map(f))
+}
 
-// case class Gen[A](sample: State[RNG, A], domain: Domain[A]) {
-//   def flatMap[B](f: A => Gen[B]): Gen[B] = Gen.flatMap(this)(f)
-//   def listOfN(n: Int): Gen[List[A]] =
-//     Gen.listOfN(n, this)
+case class Gen[A](sample: State[RNG, A], domain: Domain[A]) {
+  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen.flatMap(this)(f)
+  def listOfN(n: Int): Gen[List[A]] =
+    Gen.listOfN(n, this)
 
-//   def listOfN(size: Gen[Int]): Gen[List[A]] =
-//     size.flatMap(this.listOfN)
+  def listOfN(size: Gen[Int]): Gen[List[A]] =
+    size.flatMap(this.listOfN)
 
-//   def union(other: Gen[A]): Gen[A] =
-//     Gen.union(this, other)
+  def union(other: Gen[A]): Gen[A] =
+    Gen.union(this, other)
 
-//   def unsized: SizedGen[A] = Unsized(this)
+  def unsized: SizedGen[A] = Unsized(this)
 
-//   def map[B](f: A => B) = Gen.map(this)(f)
+  def map[B](f: A => B) = Gen.map(this)(f)
 
-//   def listOf(): SizedGen[List[A]] = Gen.listOf(this)
-//   def nonEmptyListOf(): SizedGen[List[A]] = Gen.nonEmptyListOf(this)
+  def listOf(): SizedGen[List[A]] = Gen.listOf(this)
+  def nonEmptyListOf(): SizedGen[List[A]] = Gen.nonEmptyListOf(this)
 
-//   val apply = sample.run
-// }
+  val apply = sample.run
+}

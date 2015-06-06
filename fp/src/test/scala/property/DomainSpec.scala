@@ -8,58 +8,59 @@ class DomainSpec extends FlatSpec with Matchers {
 
   "FiniteDomain" should "accept a list" in {
     // It works if it compiles.
-    new FiniteDomain(List(1, 2, 3))
+    FiniteDomain(List(1, 2, 3))
   }
 
   "FiniteDomain" should "be finite" in {
-    val domain = new FiniteDomain(List(1))
+    val domain = FiniteDomain(List(1))
     domain.isFinite should be(true)
     domain.tail.isFinite should be(true)
   }
 
   "FiniteDomain" should "be exhaustible" in {
-    val domain = new FiniteDomain(List(1))
+    val domain = FiniteDomain(List(1))
     domain.isExhausted should be(false)
     domain.tail.isExhausted should be(true)
     a[java.util.NoSuchElementException] should be thrownBy domain.tail.head()
   }
 
   "FiniteDomain" should "have size information" in {
-    new FiniteDomain(List(1, 2, 3)).size should equal(3)
-    new FiniteDomain(List(1, 2, 3)).tail.size should equal(2)
+    FiniteDomain(List(1, 2, 3)).size should equal(3)
+    FiniteDomain(List(1, 2, 3)).tail.size should equal(2)
   }
 
   "FiniteDomain" should "be mappable" in {
-    new FiniteDomain(List(1, 2, 3)).map(_ + 12).head() should equal(13)
+    FiniteDomain(List(1, 2, 3)).map(_ + 12).head() should equal(13)
   }
 
   "FiniteDomain" should "be flatmappable" in {
-    val mapped = new FiniteDomain(List(1, 2, 3)).flatMap(x => FiniteDomain(x + 12))
+    val mapped = FiniteDomain(List(1, 2, 3)).flatMap(x => FiniteDomain(List(x + 12)))
     mapped head () should equal(13)
     mapped.tail.head() should equal(14)
     mapped.tail.tail.head() should equal(15)
   }
 
   "FiniteDomain" should "have a cartesian product" in {
-    val input = FiniteDomain(
-      FiniteDomain(1, 2),
-      FiniteDomain(3, 4),
-      FiniteDomain(5, 6)
-    )
-    val expected = FiniteDomain(
-      FiniteDomain(1, 3, 5),
-      FiniteDomain(1, 3, 6),
-      FiniteDomain(1, 4, 5),
-      FiniteDomain(1, 4, 6),
-      FiniteDomain(2, 3, 5),
-      FiniteDomain(2, 3, 6),
-      FiniteDomain(2, 4, 5),
-      FiniteDomain(2, 4, 6)
-    )
+    val input = FiniteDomain(List(
+      Stream(1, 2),
+      Stream(3, 4),
+      Stream(5, 6)
+    ))
+    val expected = FiniteDomain(List(
+      Stream(1, 3, 5),
+      Stream(1, 3, 6),
+      Stream(1, 4, 5),
+      Stream(1, 4, 6),
+      Stream(2, 3, 5),
+      Stream(2, 3, 6),
+      Stream(2, 4, 5),
+      Stream(2, 4, 6)
+    ))
 
-    def deepToList[A](domain: FiniteDomain[FiniteDomain[A]]) = domain.as.map(_.as)
+    def deepToList[A](domain: FiniteDomain[Stream[A]]): List[List[A]] = domain.as.map(_.toList).toList
 
-    deepToList(FiniteDomain.cartesian(input)) should equal(deepToList(expected))
+    val actual: FiniteDomain[Stream[Int]] = Domain.cartesian(input).finite
+    deepToList(actual) should equal(deepToList(expected))
   }
 
   "InfiniteDomain" should "accept a stream" in {
@@ -105,14 +106,14 @@ class DomainSpec extends FlatSpec with Matchers {
       s.map(_.toList).toList
     val s = InfiniteDomain(
       Stream(
-        InfiniteDomain(Stream(1, 2)),
-        InfiniteDomain(Stream(3, 4)),
-        InfiniteDomain(Stream(5, 6))
+        Stream(1, 2),
+        Stream(3, 4),
+        Stream(5, 6)
       )
     )
     val expected = Stream(Stream(1, 3, 5), Stream(1, 3, 6), Stream(1, 4, 5), Stream(1, 4, 6), Stream(2, 3, 5), Stream(2, 3, 6), Stream(2, 4, 5), Stream(2, 4, 6))
 
-    val actual = InfiniteDomain.cartesian(s).as.take(8).map(_.as.take(3))
+    val actual = Domain.cartesian(s).as.take(8).map(_.take(3))
 
     deepToList(actual) should equal(deepToList(expected))
   }
@@ -128,7 +129,7 @@ class DomainSpec extends FlatSpec with Matchers {
 
   "FiniteDomain" should "be extractable" in {
     // It works if it compiles.
-    val domain = new FiniteDomain(List(1, 2, 3))
+    val domain = FiniteDomain(List(1, 2, 3))
 
     domain match {
       case FiniteDomain(h, tailDomain) => h().isInstanceOf[Int] should be(true)
@@ -137,7 +138,7 @@ class DomainSpec extends FlatSpec with Matchers {
 
   "FiniteDomain" should "recognize empty tails" in {
     // It works if it compiles.
-    val domain = new FiniteDomain(List(1, 2))
+    val domain = FiniteDomain(List(1, 2))
 
     domain match {
       case FiniteDomain(h, EmptyDomain) => fail("Recognized a non-empty domain as empty")

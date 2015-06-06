@@ -1,3 +1,5 @@
 package fp.property.domain
 
-case object EmptyDomain extends FiniteDomain[Nothing](Nil)
+import fp.Lazy.Empty
+
+case object EmptyDomain extends FiniteDomain[Nothing](Empty, 0)
