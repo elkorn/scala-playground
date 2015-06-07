@@ -90,6 +90,23 @@ class ParSpec extends FlatSpec with Matchers {
     Prop.check(law3prop) should equal(Gen.Result.Proven)
   }
 
+  "writing more complicated par opertaions" should "be possible with generators" in {
+    // Don't really know what to do with this.
+    // What it does is creates lists of 0..20 numbers in <-100, 100), spawns a separate thread for adding each number to a result accumulator.
+    val complicated: Gen[Par[Int]] = Gen.choose(-100, 100).listOfN(Gen.choose(0, 20)).map(_.foldLeft(Par.unit(0))((p, i) => fork { map2(p, unit(i))(_ + _) }))
+
+    // TODO: Bug in cartesian?
+    // Prop.check(Gen.forAll(complicated) { sumPar =>
+    //   {
+    //     val sumTry = Par.run(sumPar)
+    //     sumTry match {
+    //       case Success(sum) => sum > -2000 && sum < 2000
+    //       case Failure(err) => false
+    //     }
+    //   }
+    // }) should equal(Gen.Result.Unfalsified)
+  }
+
   "fork" should "spawn a computation on a separate thread" in {
     class CustomObservableThreadFactory() extends ThreadFactory() {
       private var counter = 0
