@@ -83,7 +83,6 @@ object Gen {
     (max, n, rng) =>
       {
         val casesPerSize = n / max + 1
-        println(s"Using $casesPerSize cases per size")
         val props: Stream[Prop] = Stream.from(0).take(max + 1).map(i => forAll(g(i))(f))
         val finalProp = props.map(p => Prop((max, _, rng) => p.check(max, casesPerSize, rng))).toList.reduce(_ && _)
         finalProp.check(max, n, rng).right.map {
