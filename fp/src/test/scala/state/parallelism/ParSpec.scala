@@ -1,5 +1,7 @@
 package fp.state.parallelism
 
+import fp.property.Prop
+import fp.property.SizedGen
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
@@ -9,6 +11,7 @@ import Par._
 import parallelism.Par
 import scala.util.Failure
 import scala.util.Success
+import fp.property.Gen
 
 class ParSpec extends FlatSpec with Matchers {
   implicit val defaultExecService = java.util.concurrent.Executors.newFixedThreadPool(1)
@@ -34,13 +37,37 @@ class ParSpec extends FlatSpec with Matchers {
 
   "map" should "uphold the basic mapping laws" in {
     def id[A](a: A) = a
-    true should equal(true)
+
+    // Creates a fixed thread pool exec. 75% of the time and an unbounded one 25% of the time.
+    val S = Gen.weighted(
+      Gen.choose(1, 4).map(Executors.newFixedThreadPool) -> .75,
+      Gen.unit(Executors.newCachedThreadPool) -> .25
+    )
+
+    import parallelism._
+    import fp.state.parallelism.Future
+
+    // TODO: Implement this for sized generators as well.
+    def forAllPar[A](g: Gen[A])(f: A => Par[Boolean]): Prop =
+      Gen.forAll(S ** g) {
+        case (s, a) => Par.run(f(a))(s).get
+      }
+
+    def checkPar[A](p: Par[Boolean]): Prop =
+      forAllPar(Gen.unit(()))(_ => p)
 
     def mustBeEqual[A](p1: Par[A], p2: Par[A]) =
       Par.equal(p1, p2) should equal(true)
 
     def law1[A](x: A)(f: A => A) =
       mustBeEqual(map(unit(x))(f), unit(f(x)))
+
+    val law1prop = checkPar {
+      areEqual(
+        map(unit(1))(_ + 1),
+        unit(2)
+      )
+    }
 
     def law2[A](x: A) =
       mustBeEqual(map(unit(x))(id), unit(id(x)))
@@ -49,12 +76,18 @@ class ParSpec extends FlatSpec with Matchers {
       mustBeEqual(map(unit(x))(id), unit(x))
 
     // The final form of the law: map(y)(id) == y
+    val law3prop = forAllPar(Gen.choose(0, 10).map(unit(_))) { n =>
+      areEqual(map(n)(y => y), n)
+    }
 
     (1 to 10) foreach (x => {
       law1(x)(_ + 123)
       law2(x)
       law3(x)
     })
+
+    Prop.check(law1prop) should equal(Gen.Result.Proven)
+    Prop.check(law3prop) should equal(Gen.Result.Proven)
   }
 
   "fork" should "spawn a computation on a separate thread" in {

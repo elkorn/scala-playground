@@ -180,6 +180,15 @@ object Gen {
     )
 
   def map[A, B](g: Gen[A])(f: A => B): Gen[B] = Gen(g.sample.map(f), g.domain.map(f))
+
+  def map2[A, B, C](ga: Gen[A], gb: Gen[B])(f: (A, B) => C): Gen[C] = for {
+    a <- ga
+    b <- gb
+  } yield f(a, b)
+
+  object ** {
+    def unapply[A, B](p: (A, B)) = Some(p)
+  }
 }
 
 case class Gen[A](sample: State[RNG, A], domain: Domain[A]) {
@@ -196,9 +205,13 @@ case class Gen[A](sample: State[RNG, A], domain: Domain[A]) {
   def unsized: SizedGen[A] = Unsized(this)
 
   def map[B](f: A => B) = Gen.map(this)(f)
+  def map2[B, C](g: Gen[B])(f: (A, B) => C) = Gen.map2(this, g)(f)
 
   def listOf(): SizedGen[List[A]] = Gen.listOf(this)
   def nonEmptyListOf(): SizedGen[List[A]] = Gen.nonEmptyListOf(this)
+
+  def **[B](gb: Gen[B]): Gen[(A, B)] =
+    (this map2 gb)((_, _))
 
   val apply = sample.run
 }

@@ -90,6 +90,9 @@ object Par {
   def equal[A](p1: Par[A], p2: Par[A])(implicit es: ExecutorService): Boolean =
     run(p1) == run(p2)
 
+  def areEqual[A](p1: Par[A], p2: Par[A]): Par[Boolean] =
+    map2(p1, p2)(_ == _)
+
   def map[A, B](pa: Par[A])(f: A => B): Par[B] =
     (es: ExecutorService) => new Future[B] {
       def apply(cb: Callback[B]): Unit = {
