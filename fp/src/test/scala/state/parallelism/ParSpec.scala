@@ -15,6 +15,16 @@ import fp.property.Gen
 
 class ParSpec extends FlatSpec with Matchers {
   implicit val defaultExecService = java.util.concurrent.Executors.newFixedThreadPool(1)
+  val S = Gen.weighted(
+    Gen.choose(1, 4).map(Executors.newFixedThreadPool) -> .75,
+    Gen.unit(Executors.newCachedThreadPool) -> .25
+  )
+
+  // TODO: Implement this for sized generators as well.
+  def forAllPar[A](g: Gen[A])(f: A => Par[Boolean]): Prop =
+    Gen.forAll(S ** g) {
+      case (s, a) => Par.run(f(a))(s).get
+    }
 
   "map2" should "map two parallel computations together" in {
     Par.equal(map2(unit(123), unit(44))(_ + _), unit(123 + 44)) should equal(true)
@@ -39,19 +49,8 @@ class ParSpec extends FlatSpec with Matchers {
     def id[A](a: A) = a
 
     // Creates a fixed thread pool exec. 75% of the time and an unbounded one 25% of the time.
-    val S = Gen.weighted(
-      Gen.choose(1, 4).map(Executors.newFixedThreadPool) -> .75,
-      Gen.unit(Executors.newCachedThreadPool) -> .25
-    )
-
     import parallelism._
     import fp.state.parallelism.Future
-
-    // TODO: Implement this for sized generators as well.
-    def forAllPar[A](g: Gen[A])(f: A => Par[Boolean]): Prop =
-      Gen.forAll(S ** g) {
-        case (s, a) => Par.run(f(a))(s).get
-      }
 
     def checkPar[A](p: Par[Boolean]): Prop =
       forAllPar(Gen.unit(()))(_ => p)
@@ -125,6 +124,14 @@ class ParSpec extends FlatSpec with Matchers {
     mock.spawnedThreads should equal(0)
     Par.run(fork(unit(12)))(executor)
     mock.spawnedThreads should equal(1)
+  }
+
+  "fork" should "obey the algebraic law" in {
+    Prop.check(
+      forAllPar(Gen.choose(-1000, 1000)) { x =>
+        map(lazyUnit(x))(_ == x)
+      }
+    ) should equal(Gen.Result.Proven)
   }
 
   "Par" should "handle exceptions correctly" in {

@@ -92,6 +92,7 @@ object Gen {
       }
   }
 
+  // TODO This domain does not seem correct.
   def choose(start: Int, stopExclusive: Int): Gen[Int] =
     Gen(
       State(RNG.nonNegativeInt).map(n => start + n % (stopExclusive - start)),
