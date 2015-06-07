@@ -1,10 +1,15 @@
 package fp.property
 
+import fp.state.SimpleRNG
 import org.scalatest._
 
 class UsageSpec extends FlatSpec with Matchers {
   import Gen._
-  import fp.property.domain.FiniteDomain
+  import fp.property.domain.{
+    Domain,
+    FiniteDomain,
+    InfiniteDomain
+  }
 
   val domain = choose(-10, 10)
   "max" should "return the maximum value from a list" in {
@@ -36,27 +41,87 @@ class UsageSpec extends FlatSpec with Matchers {
     Prop.check(maxProp) should equal(Result.Exhausted)
   }
 
-  "interleave" should "interleave two streams together according to control stream values" in {
+  "interleave" should "produce correct domain types" in {
     import fp.Lazy.Stream
 
-    val s1 = FiniteDomain(Stream.from(1).take(5).toList)
-    val s2 = FiniteDomain(Stream.from(6).take(5).toList)
-    val bools = FiniteDomain(List(true, false, false, true))
-    Gen.interleave(bools, s1, s2).finite.toList should equal(List(1, 6, 2, 7))
+    def ctrl(bs: Boolean*) =
+      FiniteDomain(bs.toList)
+
+    val rng = SimpleRNG(123L)
+
+    val infinite1 = InfiniteDomain(Stream.from(1))
+    val infinite2 = InfiniteDomain(Stream.from(6))
+    val finite1 = infinite1.take(5)
+    val finite2 = infinite2.take(5)
+
+    val infiniteCtrl = InfiniteDomain(Stream.constant(true))
+    val finiteCtrl = infiniteCtrl.take(5)
+
+    def shouldBeFinite[A](domain: Domain[A], err: String) = domain match {
+      case InfiniteDomain(_, _) => fail(err)
+      case FiniteDomain(_, _) => // ok
+      case x => fail(s"Unexpected result: $x")
+    }
+
+    def shouldBeInfinite[A](domain: Domain[A], err: String) = domain match {
+      case FiniteDomain(_, _) => fail(err)
+      case InfiniteDomain(_, _) => // ok
+      case x => fail(s"Unexpected result: $x")
+    }
+
+    shouldBeFinite(
+      Gen.interleave(finiteCtrl, finite1, finite2),
+      "interleaving FINITE DOMAINS using a FINITE CONTROL DOMAIN should result in a FINITE DOMAIN"
+    )
+
+    shouldBeFinite(
+      Gen.interleave(finiteCtrl, infinite1, infinite2),
+      "interleaving INFINITE DOMAINS using a FINITE CONTROL DOMAIN should result in a FINITE DOMAIN"
+    )
+
+    shouldBeFinite(
+      Gen.interleave(infiniteCtrl, finite1, finite2),
+      "interleaving FINITE DOMAINS using an INFINITE CONTROL DOMAIN should result in a FINITE DOMAIN"
+    )
+
+    shouldBeInfinite(
+      Gen.interleave(infiniteCtrl, finite1, infinite2),
+      "CROSSING DOMAINS using an should result in an INFINITE DOMAIN"
+    )
+
+    shouldBeInfinite(
+      Gen.interleave(infiniteCtrl, infinite1, infinite2),
+      "interleaving INFINITE DOMAINS using an INFINITE CONTROL DOMAIN should result in an INFINITE DOMAIN"
+    )
   }
 
-  // "cartesian" should "create a cartesian product of nested streams" in {
-  //   import fp.Lazy.Stream
+  "interleave" should "interleave two domains together according to control domain values" in {
+    import fp.Lazy.Stream
 
-  //   val s = Stream(Stream(1, 2), Stream(3, 4), Stream(5, 6))
-  //   val expectedResult = Stream(Stream(1, 3, 5), Stream(1, 3, 6), Stream(1, 4, 5), Stream(1, 4, 6), Stream(2, 3, 5), Stream(2, 3, 6), Stream(2, 4, 5), Stream(2, 4, 6))
+    def ctrl(bs: Boolean*) =
+      FiniteDomain(bs.toList)
 
-  //   def deepList[A](s: Stream[Stream[A]]): List[List[A]] =
-  //     s.map(_.toList).toList
+    val rng = SimpleRNG(123L)
 
-  //   deepList(Gen.cartesian(s)) should equal(deepList(expectedResult))
+    val infinite1 = InfiniteDomain(Stream.from(1))
+    val infinite2 = InfiniteDomain(Stream.from(6))
+    val finite1 = infinite1.take(5)
+    val finite2 = infinite2.take(5)
 
-  // }
+    val infiniteCtrlTrue = InfiniteDomain(Stream.constant(true))
+    val infiniteCtrlFalse = InfiniteDomain(Stream.constant(false))
+
+    lazy val infiniteStreamCross: Stream[Boolean] = Stream.cons(true, Stream.cons(false, infiniteStreamCross))
+    val infiniteCtrlCross = InfiniteDomain(infiniteStreamCross)
+
+    Gen.interleave(ctrl(true, true, true, true), finite1, finite2).finite.toList should equal(Some(List(1, 2, 3, 4)))
+    Gen.interleave(ctrl(false, false, false, false), finite1, finite2).finite.toList should equal(Some(List(6, 7, 8, 9)))
+    Gen.interleave(ctrl(true, false, true, false), finite1, finite2).finite.toList should equal(Some(List(1, 6, 2, 7)))
+    Gen.interleave(ctrl(false, false, false, true), finite1, finite2).finite.toList should equal(Some(List(6, 7, 8, 1)))
+    Gen.interleave(infiniteCtrlTrue, infinite1, infinite2).take(5).toList should equal(Some(List(1, 2, 3, 4, 5)))
+    Gen.interleave(infiniteCtrlFalse, infinite1, infinite2).take(5).toList should equal(Some(List(6, 7, 8, 9, 10)))
+    Gen.interleave(infiniteCtrlCross, infinite1, infinite2).take(6).toList should equal(Some(List(1, 6, 2, 7, 3, 8)))
+  }
 
   "finite domains" should "allow to prove properties" in {
     val booleans = List(true, false)

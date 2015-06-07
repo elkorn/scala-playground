@@ -37,4 +37,5 @@ trait Domain[+A /*, M[_]*/ ] {
   def finite: FiniteDomain[A]
   def infinite: InfiniteDomain[A]
   private[domain] val as: Stream[A]
+  def toStream: Stream[A] = as
 }

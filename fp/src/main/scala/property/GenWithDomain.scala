@@ -122,31 +122,46 @@ object Gen {
     )
   }
 
-  // TODO refactor to a more intelligent solution
   def interleave[A](ctrl: Domain[Boolean], s1: Domain[A], s2: Domain[A]): Domain[A] = ctrl match {
-    case EmptyDomain => EmptyDomain
-    case FiniteDomain(hf, tail) => hf() match {
+    case EmptyDomain =>
+      EmptyDomain
+    case FiniteDomain(hf, ctrlTail) => hf() match {
       case true => s1 match {
-        case x @ FiniteDomain(h, t) if !x.isExhausted => FiniteDomain(interleave(tail, t, s2).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
-        case _ => s2
+        case x @ Domain(h, t) if !x.isExhausted =>
+          val tail = interleave(ctrlTail, t, s2)
+          FiniteDomain(Stream(h()).append(tail.toStream).toList)
+        case EmptyDomain => s2
       }
       case false => s2 match {
-        case x @ Domain(h, t) if !x.isExhausted => FiniteDomain(interleave(tail, t, s1).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
-        case _ => s1
+        case x @ Domain(h, t) if !x.isExhausted =>
+          val tail = interleave(ctrlTail, s1, t)
+          FiniteDomain(Stream(h()).append(tail.toStream).toList)
+        case EmptyDomain => s1
       }
     }
 
-    case InfiniteDomain(hf, _) => hf() match {
+    case InfiniteDomain(hf, ctrlTail) => hf() match {
+      // The tails have to be lazy here to allow infinite domains in both s1 and s2.
       case true => s1 match {
-        case x @ FiniteDomain(h, t) if !x.isExhausted => FiniteDomain(interleave(ctrl tail, t, s2).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
-        case x @ InfiniteDomain(h, t) if !x.isExhausted => InfiniteDomain(interleave(ctrl tail, t, s2).foldRight(Stream(h()))(Stream.cons(_, _)))
-        case _ => s2
+        case EmptyDomain => s2
+        case x @ FiniteDomain(h, t) if !x.isExhausted =>
+          lazy val tail = interleave(ctrlTail, t, s2)
+          if (s2.isFinite) FiniteDomain(Stream(h()).append(tail.toStream).toList)
+          else InfiniteDomain(Stream(h()).append(tail.toStream))
+        case x @ InfiniteDomain(h, t) if !x.isExhausted =>
+          lazy val tail = interleave(ctrlTail, t, s2)
+          InfiniteDomain(Stream(h()).append(tail.toStream))
       }
 
       case false => s2 match {
-        case x @ FiniteDomain(h, t) if !x.isExhausted => FiniteDomain(interleave(ctrl tail, t, s1).foldRight(Stream(h()))(Stream.cons(_, _)).toList)
-        case x @ InfiniteDomain(h, t) if !x.isExhausted => InfiniteDomain(interleave(ctrl tail, t, s1).foldRight(Stream(h()))(Stream.cons(_, _)))
-        case _ => s1
+        case EmptyDomain => s1
+        case x @ FiniteDomain(h, t) if !x.isExhausted =>
+          lazy val tail = interleave(ctrlTail, s1, t)
+          if (s1.isFinite) FiniteDomain(Stream(h()).append(tail.toStream).toList)
+          else InfiniteDomain(Stream(h()).append(tail.toStream))
+        case x @ InfiniteDomain(h, t) if !x.isExhausted =>
+          lazy val tail = interleave(ctrlTail, s1, t)
+          InfiniteDomain(Stream(h()).append(tail.toStream))
       }
     }
   }
