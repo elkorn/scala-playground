@@ -54,4 +54,9 @@ class GenSpec extends FlatSpec with Matchers {
     list should have size 10
     list foreach verify
   }
+
+  "cartesian" should "have no bugs" in {
+    val buggyGen = Gen.choose(-100, 100).listOfN(Gen.choose(0, 20)).map(_.foldLeft(0)((_ + _)))
+    Prop.check(Gen.forAll(buggyGen) { sum => sum > -2000 && sum < 2000 }) should equal(Gen.Result.Unfalsified)
+  }
 }
