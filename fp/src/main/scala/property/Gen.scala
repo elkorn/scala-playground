@@ -182,6 +182,13 @@ object Gen {
 
   def map[A, B](g: Gen[A])(f: A => B): Gen[B] = Gen(g.sample.map(f), g.domain.map(f))
 
+  def genStringIntFn(g: Gen[Int]): Gen[String => Int] =
+    g map (i => (_ => i))
+
+  // Don't know how to deal with this...
+  def genHof[A, B, C](ga: Gen[A])(f: A => B => C): Gen[B => C] =
+    ga map (f)
+
   def map2[A, B, C](ga: Gen[A], gb: Gen[B])(f: (A, B) => C): Gen[C] = for {
     a <- ga
     b <- gb
