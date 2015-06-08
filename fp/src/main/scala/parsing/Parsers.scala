@@ -1,5 +1,7 @@
 package fp.parsing
 
+import scala.util.matching.Regex
+
 trait Parsers[ParseError, Parser[+_]] { self =>
   /*
    Infix operator support.
@@ -10,6 +12,8 @@ trait Parsers[ParseError, Parser[+_]] { self =>
   def run[A](p: Parser[A])(input: String): Either[ParseError, A]
 
   def string(s: String): Parser[String]
+
+  implicit def regex(r: Regex): Parser[String]
 
   def char(c: Char): Parser[Char] = string(c.toString()) map (_.charAt(0))
 
@@ -23,6 +27,12 @@ trait Parsers[ParseError, Parser[+_]] { self =>
   def or[A](a1: Parser[A], a2: Parser[A]): Parser[A]
 
   def repetitions[A](n: Int, p: Parser[A]): Parser[List[A]]
+
+  def occurrences[A](p: Parser[A]): Parser[Int] = for {
+    digit <- "[0-9]+".r
+    val n = digit.toInt
+    _ <- listOfN(n, p)
+  } yield n
 
   def many[A](p: Parser[A]): Parser[List[A]] =
     map2(p, p many)(_ :: _) or succeed(Nil: List[A])
@@ -43,17 +53,36 @@ trait Parsers[ParseError, Parser[+_]] { self =>
   def zeroOrManyAndAtLeastOne[A](p1: Parser[A], p2: Parser[A]): Parser[(Int, Int)] =
     p1.count ** p2.atLeastOne.count
 
-  def map[A, B](p: Parser[A])(f: A => B): Parser[B]
+  def map[A, B](p: Parser[A])(f: A => B): Parser[B] = for {
+    a <- p
+  } yield f(a)
 
+  // This enables context-sensitive parsing (see `occurrences`)
   def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B]
 
-  def map2[A, B, C](pa: Parser[A], pb: Parser[B])(f: (A, B) => C): Parser[C] = for {
+  /*
+   `map2` and `product` have to be non-strict in their second parser arguments.
+   Otherwise, calling `many` would never terminate, because strict evaluation would cause the left branch of the `or` to evaluate infinitely (due to nested `p many` without any `if` statements).
+   */
+
+  def map2[A, B, C](pa: Parser[A], pb: => Parser[B])(f: (A, B) => C): Parser[C] = for {
     a <- pa
     b <- pb
   } yield f(a, b)
 
-  def product[A, B](pa: Parser[A], pb: Parser[B]): Parser[(A, B)] =
-    pa.map2(pb)((_, _))
+  /*
+   A different approach for adding non-strictness, leaving it up to the user when should the parser be evaluated lazily.
+   This would be a sensible approach if we implement branching parsers and the user would like to use custom branching schemes? I'm not sure...
+   */
+  def lazyUnit[A](pa: => Parser[A]) = pa
+
+  // def many[A](p: Parser[A]): Parser[List[A]] =
+  //   map2(p, lazyUnit(p many))(_ :: _) or succeed(Nil: List[A])
+
+  def product[A, B](pa: Parser[A], pb: => Parser[B]): Parser[(A, B)] = for {
+    a <- pa
+    b <- pb
+  } yield (a, b)
 
   case class ParserOps[A](p: Parser[A]) {
     def |[AA >: A](p2: Parser[AA]): Parser[AA] = self.or(p, p2)
