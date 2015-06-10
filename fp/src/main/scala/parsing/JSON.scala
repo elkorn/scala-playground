@@ -17,14 +17,15 @@ object JSON {
     val space = char(' ')
     val newline = char('\n')
     val tab = char('\t')
-    val whitespace = (space or newline or tab).many.slice
+    val whitespace = (space | newline | tab).many.slice
     val notQuote ="[^\"\']*".r
 
-    val str: Parser[String] = (notQuote surround(char('\''), char('\''))) or (notQuote surround(char('"'), char('"')))
+    val jNull = string("null").map(_ => JNull)
+    val str: Parser[String] = (notQuote surround(char('\''), char('\''))) | (notQuote surround(char('"'), char('"')))
     val jStr: Parser[JString] = str.map(str => JString(str))
     val number: Parser[JNumber] = "\\d+(\\.\\d+)?".r.map(str => JNumber(str.toDouble))
     val bool = "true|false".r.map(str => JBool(str.toBoolean))
-    val literal: Parser[JSON] = jStr or number or bool
+    val literal: Parser[JSON] = jNull | jStr | number | bool
     def sep(c: Char) = whitespace ** char(',') ** whitespace
     val array: Parser[JArray] = literal
       .manySeparated(sep(','))
@@ -34,7 +35,7 @@ object JSON {
     lazy val kv: Parser[(String, JSON)] = for {
         k <- str
         _ <- sep(':')
-        v <- literal or array or obj
+        v <- literal | array | obj
       } yield (k, v)
 
     lazy val obj:Parser[JObject]  = kv.manySeparated(sep(',')).surround(sep('{'), sep('}'))
@@ -42,7 +43,7 @@ object JSON {
 
     for {
       _ <- whitespace
-      json <- literal or array or obj
+      json <- literal | array | obj
       _ <- whitespace
     } yield json
   }

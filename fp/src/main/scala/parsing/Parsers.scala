@@ -56,6 +56,13 @@ trait Parsers[ParseError, Parser[+_]] { self =>
       case nonEmptyList => nonEmptyList
     }
 
+  // These might be needed, but the literal implementations might work as well (I'm doing _ <- everywhere).
+  // def skipLeft[A](p: Parser[Any], pa: => Parser[A]): Parser[A] =
+  //   map2(slice(p), pa)((_, a) => a)
+
+  // def skipRight[A](p: Parser[Any], pa: => Parser[A]): Parser[A] =
+  //   map2(slice(p), pa)((_, a) => a)
+
   def manySeparated[A,B](p: Parser[A], separator: Parser[B]): Parser[List[A]] = 
 map2((for {
       v <- p
