@@ -2,10 +2,15 @@ package fp.property
 
 case class Unsized[A](get: Gen[A]) extends SizedGen[A] {
   def apply(n: Int) = get
+  def **[B](sgb: SizedGen[B]) = sgb match {
+    case Unsized(getB) => Unsized(get ** getB)
+    case Sized(_) => Sized(n => this(n) ** sgb(n))
+  }
 }
 
 case class Sized[A](forSize: Int => Gen[A]) extends SizedGen[A] {
   def apply(n: Int) = forSize(n)
+  def **[B](sgb: SizedGen[B]) = Sized(n => this(n) ** sgb(n))
 }
 
 trait SizedGen[A] {
@@ -20,4 +25,5 @@ trait SizedGen[A] {
   }
 
   def apply(n: Int): Gen[A]
+  def **[B](sgb: SizedGen[B]): SizedGen[(A, B)]
 }

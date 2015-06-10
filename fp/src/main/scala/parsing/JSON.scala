@@ -11,17 +11,14 @@ object JSON {
   case class JArray(get: IndexedSeq[JSON]) extends JSON
   case class JObject(get: Map[String, JSON]) extends JSON
 
-  def jsonParser[Err, Parser[+_]](P: Parsers[Err, Parser]): Parser[JSON] = {
+  def jsonParser[Parser[+_]](P: Parsers[Parser]): Parser[JSON] = {
     import P._
 
-    val space = char(' ')
-    val newline = char('\n')
-    val tab = char('\t')
-    val whitespace = (space | newline | tab).many.slice
-    val notQuote ="[^\"\']*".r
+    val whitespace = "\\s".r.many.slice
+    val notQuote = "[^\"\']*".r
 
     val jNull = string("null").map(_ => JNull)
-    val str: Parser[String] = (notQuote surround(char('\''), char('\''))) | (notQuote surround(char('"'), char('"')))
+    val str: Parser[String] = (notQuote surround (char('\''), char('\''))) | (notQuote surround (char('"'), char('"')))
     val jStr: Parser[JString] = str.map(str => JString(str))
     val number: Parser[JNumber] = "\\d+(\\.\\d+)?".r.map(str => JNumber(str.toDouble))
     val bool = "true|false".r.map(str => JBool(str.toBoolean))
@@ -33,12 +30,12 @@ object JSON {
       .map(list => JArray(list.toIndexedSeq))
 
     lazy val kv: Parser[(String, JSON)] = for {
-        k <- str
-        _ <- sep(':')
-        v <- literal | array | obj
-      } yield (k, v)
+      k <- str
+      _ <- sep(':')
+      v <- literal | array | obj
+    } yield (k, v)
 
-    lazy val obj:Parser[JObject]  = kv.manySeparated(sep(',')).surround(sep('{'), sep('}'))
+    lazy val obj: Parser[JObject] = kv.manySeparated(sep(',')).surround(sep('{'), sep('}'))
       .map(list => JObject(list.toMap))
 
     for {

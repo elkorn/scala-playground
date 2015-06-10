@@ -1,8 +1,10 @@
 package fp.parsing
 
+import fp.property.SizedGen
+import scala.collection.mutable.Stack
 import scala.util.matching.Regex
 
-trait Parsers[ParseError, Parser[+_]] { self =>
+trait Parsers[Parser[+_]] { self =>
   /*
    Infix operator support.
   */
@@ -21,6 +23,8 @@ trait Parsers[ParseError, Parser[+_]] { self =>
   def succeed[A](a: A): Parser[A] =
     string("") map (_ => a)
 
+  def fail[A](): Parser[A]
+
   // This parser can be run to see what portion of a string it examines.
   def slice[A](p: Parser[A]): Parser[String]
 
@@ -34,7 +38,7 @@ trait Parsers[ParseError, Parser[+_]] { self =>
     _ <- listOfN(n, p)
   } yield n
 
-  def surround[A,B](p: Parser[A], left: Parser[B], right: Parser[B]): Parser[A] = for {
+  def surround[A, B](p: Parser[A], left: Parser[B], right: Parser[B]): Parser[A] = for {
     _ <- left
     v <- p
     _ <- right
@@ -63,12 +67,14 @@ trait Parsers[ParseError, Parser[+_]] { self =>
   // def skipRight[A](p: Parser[Any], pa: => Parser[A]): Parser[A] =
   //   map2(slice(p), pa)((_, a) => a)
 
-  def manySeparated[A,B](p: Parser[A], separator: Parser[B]): Parser[List[A]] = 
-map2((for {
-      v <- p
-      _ <- separator
+  def manySeparated[A, B](p: Parser[A], separator: Parser[B]): Parser[List[A]] =
+    map2(
+      (for {
+        v <- p
+        _ <- separator
       } yield v) many,
-     p map(List(_)) or succeed(Nil:List[A]))(_ ::: _)
+      p map (List(_)) or succeed(Nil: List[A])
+    )(_ ::: _)
 
   def zeroOrManyAndAtLeastOne[A](p1: Parser[A], p2: Parser[A]): Parser[(Int, Int)] =
     p1.count ** p2.atLeastOne.count
@@ -103,6 +109,29 @@ map2((for {
     a <- pa
     b <- pb
   } yield (a, b)
+
+  // Error handling combinators
+
+  // A way of labelling parsers.
+  def label[A](msg: String)(p: Parser[A]): Parser[A]
+
+  // A way of nesting labels.
+  def scope[A](msg: String)(p: Parser[A]): Parser[A]
+
+  def attempt[A](p: Parser[A]): Parser[A]
+
+  case class ParseError(stack: Stack[(Location, String)])
+
+  case class Location(input: String, offset: Int = 0) {
+    lazy val line = input.slice(0, offset + 1).count(_ == '\n') + 1
+    lazy val col = input.slice(0, offset + 1).lastIndexOf('\n') match {
+      case -1 => offset + 1
+      case lineStart => offset - lineStart
+    }
+  }
+
+  def errorLocation(e: ParseError): Location
+  def errorMessage(e: ParseError): String
 
   case class ParserOps[A](p: Parser[A]) {
     def |[AA >: A](p2: Parser[AA]): Parser[AA] = self.or(p, p2)
@@ -158,6 +187,19 @@ map2((for {
           pa.map(f) ** pb.map(g),
           (pa ** pb) map { case (a, b) => (f(a), g(b)) }
         )(input)
+
+      def labelLaw[A](p: Parser[A])(inputs: SizedGen[String]): Prop =
+        Gen.forAll(inputs ** Gen.string) {
+          case (input, msg) => run(label(msg)(p))(input) match {
+            case Left(e) => errorMessage(e) == msg
+            case _ => true
+          }
+        }
+
+      def attemptLaw[A](p1: Parser[A], p2: Parser[A])(input: Gen[String]): Prop =
+        Gen.forAll(input) { str =>
+          attempt(p1.flatMap(_ => fail())).or(p2) == p2
+        }
     }
   }
 }

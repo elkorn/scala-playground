@@ -34,6 +34,11 @@ object Gen {
 
   def byte: Gen[Byte] = Gen(State(RNG.int).map(x => (x % 256).toByte), FiniteDomain(Stream.from(0).take(255).map(_.toByte).toList))
 
+  def stringN(n: Int): Gen[String] =
+    listOfN(n, choose(0, 127)).map(_.map(_.toChar).toString)
+
+  val string: SizedGen[String] = Sized(stringN)
+
   private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
     Stream.unfold(rng)(rng => Some(g.sample.run(rng)))
 
