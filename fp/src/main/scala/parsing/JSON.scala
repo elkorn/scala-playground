@@ -14,7 +14,36 @@ object JSON {
   def jsonParser[Err, Parser[+_]](P: Parsers[Err, Parser]): Parser[JSON] = {
     import P._
 
-    val spaces = char(' ').many.slice
-    ???
+    val space = char(' ')
+    val newline = char('\n')
+    val tab = char('\t')
+    val whitespace = (space or newline or tab).many.slice
+    val notQuote ="[^\"\']*".r
+
+    val str: Parser[String] = (notQuote surround(char('\''), char('\''))) or (notQuote surround(char('"'), char('"')))
+    val jStr: Parser[JString] = str.map(str => JString(str))
+    val number: Parser[JNumber] = "\\d+(\\.\\d+)?".r.map(str => JNumber(str.toDouble))
+    val bool = "true|false".r.map(str => JBool(str.toBoolean))
+    val literal: Parser[JSON] = jStr or number or bool
+    def sep(c: Char) = whitespace ** char(',') ** whitespace
+    val array: Parser[JArray] = literal
+      .manySeparated(sep(','))
+      .surround(sep('['), sep(']'))
+      .map(list => JArray(list.toIndexedSeq))
+
+    lazy val kv: Parser[(String, JSON)] = for {
+        k <- str
+        _ <- sep(':')
+        v <- literal or array or obj
+      } yield (k, v)
+
+    lazy val obj:Parser[JObject]  = kv.manySeparated(sep(',')).surround(sep('{'), sep('}'))
+      .map(list => JObject(list.toMap))
+
+    for {
+      _ <- whitespace
+      json <- literal or array or obj
+      _ <- whitespace
+    } yield json
   }
 }

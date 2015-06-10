@@ -34,6 +34,12 @@ trait Parsers[ParseError, Parser[+_]] { self =>
     _ <- listOfN(n, p)
   } yield n
 
+  def surround[A,B](p: Parser[A], left: Parser[B], right: Parser[B]): Parser[A] = for {
+    _ <- left
+    v <- p
+    _ <- right
+  } yield v
+
   def many[A](p: Parser[A]): Parser[List[A]] =
     map2(p, p many)(_ :: _) or succeed(Nil: List[A])
 
@@ -49,6 +55,13 @@ trait Parsers[ParseError, Parser[+_]] { self =>
       case Nil => throw new RuntimeException("Errors need to be handled better :)")
       case nonEmptyList => nonEmptyList
     }
+
+  def manySeparated[A,B](p: Parser[A], separator: Parser[B]): Parser[List[A]] = 
+map2((for {
+      v <- p
+      _ <- separator
+      } yield v) many,
+     p map(List(_)) or succeed(Nil:List[A]))(_ ::: _)
 
   def zeroOrManyAndAtLeastOne[A](p1: Parser[A], p2: Parser[A]): Parser[(Int, Int)] =
     p1.count ** p2.atLeastOne.count
@@ -96,6 +109,8 @@ trait Parsers[ParseError, Parser[+_]] { self =>
     def **[B](pb: Parser[B]) = self.product(p, pb)
     def count = self.count(p)
     def atLeastOne = self.atLeastOne(p)
+    def surround[B](left: Parser[B], right: Parser[B]) = self.surround(p, left, right)
+    def manySeparated[B](separator: Parser[B]) = self.manySeparated(p, separator)
   }
 
   object Laws {
