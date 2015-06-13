@@ -24,10 +24,11 @@ object JSON {
       .map(str => JNumber(str.toDouble)).label("number literal")
     def jBool = (string("true") or string("false")).map(str => JBool(str.toBoolean))
     def jLiteral: Parser[JSON] = jNull | jStr | jNumber | jBool
-    def jArray: Parser[JArray] = jLiteral
+    def jArray: Parser[JArray] = value
       .manySeparated(sep(','))
       .surround(sep('['), sep(']'))
       .map(list => JArray(list.toIndexedSeq))
+      .scope("array")
 
     def kv: Parser[(String, JSON)] = for {
       _ <- whitespace
@@ -39,6 +40,9 @@ object JSON {
 
     def jObj: Parser[JObject] = kv.manySeparated(sep(',')).surround(sep('{'), sep('}'))
       .map(list => JObject(list.toMap))
+      .scope("object")
+
+    def value = jLiteral | jObj | jArray
   }
 
   def jsonParser[Parser[+_]](P: Parsers[Parser]): Parser[JSON] = {

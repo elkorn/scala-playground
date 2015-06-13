@@ -34,7 +34,7 @@ class JSONParserLiteralOpsSpec extends FlatSpec with Matchers with EitherOps {
   "jArray" should "recognize arrays" in {
     jArray.run("[1,2,3]") shouldSucceedWith JArray(List(JNumber(1.0), JNumber(2.0), JNumber(3.0)).toIndexedSeq)
     jArray.run("""[1,2,"3"]""") shouldSucceedWith JArray(List(JNumber(1.0), JNumber(2.0), JString("3")).toIndexedSeq)
-    // jArray.run("""[1,2,[3,4]]""") shouldSucceedWith JArray(List(JNumber(1.0), JNumber(2.0), JArray(List(JNumber(3.0), JNumber(4.0)).toIndexedSeq)).toIndexedSeq)
+    jArray.run("""[1,2,[3,4]]""") shouldSucceedWith JArray(List(JNumber(1.0), JNumber(2.0), JArray(List(JNumber(3.0), JNumber(4.0)).toIndexedSeq)).toIndexedSeq)
   }
 
   "kv" should "recognize key-value pairs" in {
