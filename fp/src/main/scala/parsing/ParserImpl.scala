@@ -2,62 +2,101 @@ package fp.parsing
 
 import MyParser._
 import scala.collection.mutable.Stack
+import scala.util.matching.Regex
 
 object MyParser {
-  type Parser[+A] = LocationWithLabel => Result[A]
+  type Parser[+A] = ParseState => Result[A]
 
   implicit def resultToEither[A](result: Result[A]): Either[ParseError, A] = result match {
-    case ParseSuccess(v) => Right(v)
-    case ParseFailure(err) => Left(err)
+    case ParseSuccess(v, _) => Right(v)
+    case ParseFailure(err, _) => Left(err)
   }
 
-  implicit def locationToLocationWithLabel(location: Location) = LocationWithLabel(location)
+  // implicit def locationToLocationWithLabel(location: Location) = LocationWithLabel(location)
 
-  sealed trait Result[+A]
+  sealed trait Result[+A] {
+    def mapError(f: ParseError => ParseError): Result[A] = this match {
+      case ParseFailure(err, isCommited) => ParseFailure(f(err), isCommited)
+      case success => success
+    }
 
-  case class ParseSuccess[A](get: A) extends Result[A]
+    def uncommit: Result[A] = this match {
+      case ParseFailure(e, true) => ParseFailure(e, false)
+      case _ => this
+    }
 
-  object ParseFailure {
-    def direct(location: LocationWithLabel) =
-      ParseFailure(ParseError(Stack((location.location, location.label))))
+    def advanceSuccess(n: Int): Result[A] = this match {
+      case ParseSuccess(a, m) => ParseSuccess(a, n + m)
+      case _ => this
+    }
+
+    def commit(isCommited: Boolean): Result[A] = this match {
+      case ParseFailure(e, previouslyCommited) => ParseFailure(e, previouslyCommited || isCommited)
+      case _ => this
+    }
   }
 
-  case class LocationWithLabel(location: Location, label: String = "") {
-    def tail = location.tail
-  }
+  case class ParseSuccess[A](get: A, charsConsumed: Int) extends Result[A]
 
-  case class ParseFailure(error: ParseError) extends Result[Nothing]
+  case class ParseFailure(get: ParseError, isCommited: Boolean) extends Result[Nothing]
+
+  case class ParseState(location: Location) {
+    def advanceBy(chars: Int) =
+      copy(location = location.copy(offset = location.offset + chars))
+
+    def input = location.input.substring(location.offset)
+
+    def slice(n: Int) = location.input.slice(location.offset, location.offset + n)
+
+    val toError = location.toError _
+  }
 }
 
 trait MyParsers extends Parsers[Parser] {
-  def run[A](p: Parser[A])(input: String): Either[ParseError, A] =
-    p(Location(input, 0))
+  def run[A](p: Parser[A])(input: String): Either[ParseError, A] = p(ParseState(Location(input)))
 
-  def string(s: String): Parser[String] = location => location.tail match {
-    case input if input == s => ParseSuccess(input)
-    case input => ParseFailure.direct(location.copy(label = s"'$input' is not a string I want."))
+  def string(s: String): Parser[String] = {
+    case state @ ParseState(_) if state.input.startsWith(s) => ParseSuccess(s, s.length)
+    case state => ParseFailure(state.toError(s"Expected: $s."), false)
   }
 
-  def fail[A]() =
-    location => ParseFailure.direct(location.copy(label = s"Failing because you told me to."))
+  def fail[A](msg: String = "fail() called."): Parser[A] =
+    state => ParseFailure(
+      state.toError(msg),
+      true
+    )
 
-  def slice[A](p: Parser[A]): Parser[String] = location => p.map(_ => location.tail)(location)
-
-  def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B] = p(_) match {
-    // Here it should go forward.
-    case ParseSuccess(a) => f(a)
-    case fail => fail
+  def regex(r: Regex): Parser[String] = state => {
+    val msg = s"regex $r"
+    r.findPrefixOf(state.input) match {
+      case Some(str) => ParseSuccess(str, str.length())
+      case None => ParseFailure(state.toError(msg), false)
+    }
   }
 
-  def or[A](a1: Parser[A], a2: Parser[A]): Parser[A] = location => a1(location) match {
-    case success @ ParseSuccess(_) => success
-    case ParseFailure(err) => a2(location)
+  def slice[A](p: Parser[A]): Parser[String] = state => p(state) match {
+    case ParseSuccess(_, count) => ParseSuccess(state.slice(count), count)
+    case ParseFailure(err, isCommited) => ParseFailure(err, isCommited)
   }
 
-  def attempt[A](p: Parser[A]): Parser[A] = p(_)
+  def scope[A](msg: String)(p: Parser[A]): Parser[A] =
+    state => p(state).mapError(_.push(state.location, msg))
 
-  def label[A](msg: String)(p: Parser[A]): Parser[A] = location => p(location.copy(label = msg))
+  def label[A](msg: String)(p: Parser[A]): Parser[A] =
+    state => p(state).mapError(_.label(msg))
 
-  // I don't really want to think about this now.
-  def scope[A](msg: String)(p: Parser[A]): Parser[A] = label(s"scope:$msg")(p)
+  def attempt[A](p: Parser[A]): Parser[A] = p(_).uncommit
+
+  def or[A](a1: Parser[A], a2: Parser[A]): Parser[A] = state => a1(state) match {
+    case ParseFailure(e, false) => a2(state)
+    case other => other
+  }
+
+  def succeed[A](a: A): Parser[A] = _ => ParseSuccess(a, 0)
+
+  def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B] = state => p(state) match {
+    case ParseSuccess(a, n) =>
+      f(a)(state.advanceBy(n)).commit(n != 0).advanceSuccess(n)
+    case fail @ ParseFailure(_, _) => fail
+  }
 }

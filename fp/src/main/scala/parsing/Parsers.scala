@@ -17,13 +17,18 @@ trait Parsers[Parser[+_]] { self =>
 
   implicit def regex(r: Regex): Parser[String]
 
-  def char(c: Char): Parser[Char] = string(c.toString()) map (_.charAt(0))
+  def char(c: Char): Parser[Char] = {
+    println(s"Creating char for '$c'")
+    string(c.toString()) map (str => {
+      println(s"Got $str")
+      str.charAt(0)
+    })
+  }
 
   // This is the "unit" parser (or the equivalent of "fork" in Par)
-  def succeed[A](a: A): Parser[A] =
-    string("") map (_ => a)
+  def succeed[A](a: A): Parser[A]
 
-  def fail[A](): Parser[A]
+  def fail[A](msg: String = "fail() called."): Parser[A]
 
   // This parser can be run to see what portion of a string it examines.
   def slice[A](p: Parser[A]): Parser[String]
@@ -48,7 +53,7 @@ trait Parsers[Parser[+_]] { self =>
     _ <- right
   } yield v
 
-  def many[A](p: Parser[A]): Parser[List[A]] =
+  def many[A](p: => Parser[A]): Parser[List[A]] =
     map2(p, p many)(_ :: _) or succeed(Nil: List[A])
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] =
@@ -83,11 +88,9 @@ trait Parsers[Parser[+_]] { self =>
   def zeroOrManyAndAtLeastOne[A](p1: Parser[A], p2: Parser[A]): Parser[(Int, Int)] =
     p1.count ** p2.atLeastOne.count
 
-  def map[A, B](p: Parser[A])(f: A => B): Parser[B] = for {
-    a <- p
-  } yield f(a)
-
+  def map[A, B](p: Parser[A])(f: A => B): Parser[B] = flatMap(p)(f andThen succeed)
   // This enables context-sensitive parsing (see `occurrences`)
+
   def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B]
 
   /*
@@ -123,9 +126,6 @@ trait Parsers[Parser[+_]] { self =>
   def scope[A](msg: String)(p: Parser[A]): Parser[A]
 
   def attempt[A](p: Parser[A]): Parser[A]
-
-  def errorLocation(e: ParseError): Location
-  def errorMessage(e: ParseError): String
 
   case class ParserOps[A](p: Parser[A]) {
     def |[AA >: A](p2: Parser[AA]): Parser[AA] = self.or(p, p2)
@@ -182,13 +182,13 @@ trait Parsers[Parser[+_]] { self =>
           (pa ** pb) map { case (a, b) => (f(a), g(b)) }
         )(input)
 
-      def labelLaw[A](p: Parser[A])(inputs: SizedGen[String]): Prop =
-        Gen.forAll(inputs ** Gen.string) {
-          case (input, msg) => run(label(msg)(p))(input) match {
-            case Left(e) => errorMessage(e) == msg
-            case _ => true
-          }
-        }
+      // def labelLaw[A](p: Parser[A])(inputs: SizedGen[String]): Prop =
+      //   Gen.forAll(inputs ** Gen.string) {
+      //     case (input, msg) => run(label(msg)(p))(input) match {
+      //       case Left(e) => errorMessage(e) == msg
+      //       case _ => true
+      //     }
+      //   }
 
       def attemptLaw[A](p1: Parser[A], p2: Parser[A])(input: Gen[String]): Prop =
         Gen.forAll(input) { str =>
@@ -198,7 +198,20 @@ trait Parsers[Parser[+_]] { self =>
   }
 }
 
-case class ParseError(stack: Stack[(Location, String)])
+case class ParseError(stack: Stack[(Location, String)]) {
+  def push(loc: Location, msg: String): ParseError =
+    copy(stack = stack.push((loc, msg)))
+
+  def latest = stack.lastOption
+
+  // Takes only the latest location and changes its message to the label.
+  def label(l: String): ParseError =
+    ParseError(latest.map(pair => Stack((pair._1, l)))
+      .getOrElse(Stack[(Location, String)]()))
+
+  override def toString(): String =
+    stack.map(p => s"${p._2}\t(${p._1})").mkString("\n")
+}
 
 case class Location(input: String, offset: Int = 0) {
   lazy val line = input.slice(0, offset + 1).count(_ == '\n') + 1
@@ -207,5 +220,14 @@ case class Location(input: String, offset: Int = 0) {
     case lineStart => offset - lineStart
   }
 
-  lazy val tail = input.substring(offset)
+  def toError(msg: String): ParseError =
+    ParseError(Stack((this, msg)))
+
+  override def toString(): String = {
+    val startIndex = offset - 5
+    val endIndex = offset + 5
+    val ellipsis = "..."
+
+    s"at $line:$col: ${if (startIndex > 0) ellipsis else ""}${input.substring(startIndex max 0, endIndex min input.length)}${if (endIndex < input.length) ellipsis else ""}"
+  }
 }
