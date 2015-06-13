@@ -33,6 +33,10 @@ trait Parsers[Parser[+_]] { self =>
 
   def or[A](a1: Parser[A], a2: Parser[A]): Parser[A]
 
+  def eof = regex("\\z".r).label("Unexpected trailing characters")
+
+  def whitespace = "\\s".r.many.slice
+
   def repetitions[A](n: Int, p: Parser[A]): Parser[List[A]] =
     listOfN(n, p).flatMap {
       case list if list.length == n => succeed(list)
@@ -68,14 +72,17 @@ trait Parsers[Parser[+_]] { self =>
     }
 
   // These might be needed, but the literal implementations might work as well (I'm doing _ <- everywhere).
-  // def skipLeft[A](p: Parser[Any], pa: => Parser[A]): Parser[A] =
-  //   map2(slice(p), pa)((_, a) => a)
+  def skipLeft[B](p: Parser[Any], pb: => Parser[B]): Parser[B] =
+    map2(slice(p), pb)((_, b) => b)
 
-  // def skipRight[A](p: Parser[Any], pa: => Parser[A]): Parser[A] =
-  //   map2(slice(p), pa)((_, a) => a)
+  def skipRight[A](pa: Parser[A], p: => Parser[Any]): Parser[A] =
+    map2(pa, slice(p))((a, _) => a)
 
-  def manySeparated[A, B](p: Parser[A], separator: Parser[B]): Parser[List[A]] = //{
-    map2(listOfN(1, p), separator.flatMap(_ => p).many)(_ ::: _) | listOfN(1, p)
+  def zeroOrMoreSeparated[A, B](p: Parser[A], separator: Parser[B]): Parser[List[A]] =
+    manySeparated(p, separator) or succeed(List())
+
+  def manySeparated[A, B](p: Parser[A], separator: Parser[B]): Parser[List[A]] =
+    map2(p, many(separator *> p))(_ :: _)
 
   def zeroOrManyAndAtLeastOne[A](p1: Parser[A], p2: Parser[A]): Parser[(Int, Int)] =
     p1.count ** p2.atLeastOne.count
@@ -119,6 +126,9 @@ trait Parsers[Parser[+_]] { self =>
 
   def attempt[A](p: Parser[A]): Parser[A]
 
+  def token[A](p: Parser[A]): Parser[A] =
+    attempt(p) <* whitespace
+
   case class ParserOps[A](p: Parser[A]) {
     def |[AA >: A](p2: Parser[AA]): Parser[AA] = self.or(p, p2)
     def or[AA >: A](p2: Parser[AA]): Parser[AA] = self.or(p, p2)
@@ -133,7 +143,11 @@ trait Parsers[Parser[+_]] { self =>
     def atLeastOne = self.atLeastOne(p)
     def surround[B](left: Parser[B], right: Parser[B]) = self.surround(p, left, right)
     def manySeparated[B](separator: Parser[B]) = self.manySeparated(p, separator)
+    def label(msg: String) = self.label(msg)(p)
+    def scope(msg: String) = self.scope(msg)(p)
     def run(input: String) = self.run(p)(input)
+    def *>[B](pb: => Parser[B]) = self.skipLeft(p, pb)
+    def <*(pb: => Parser[Any]) = self.skipRight(p, pb)
   }
 
   object Laws {
