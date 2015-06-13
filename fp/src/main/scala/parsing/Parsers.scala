@@ -30,7 +30,11 @@ trait Parsers[Parser[+_]] { self =>
 
   def or[A](a1: Parser[A], a2: Parser[A]): Parser[A]
 
-  def repetitions[A](n: Int, p: Parser[A]): Parser[List[A]]
+  def repetitions[A](n: Int, p: Parser[A]): Parser[List[A]] =
+    listOfN(n, p).flatMap {
+      case list if list.length == n => succeed(list)
+      case _ => fail()
+    }
 
   def occurrences[A](p: Parser[A]): Parser[Int] = for {
     digit <- "[0-9]+".r
@@ -120,16 +124,6 @@ trait Parsers[Parser[+_]] { self =>
 
   def attempt[A](p: Parser[A]): Parser[A]
 
-  case class ParseError(stack: Stack[(Location, String)])
-
-  case class Location(input: String, offset: Int = 0) {
-    lazy val line = input.slice(0, offset + 1).count(_ == '\n') + 1
-    lazy val col = input.slice(0, offset + 1).lastIndexOf('\n') match {
-      case -1 => offset + 1
-      case lineStart => offset - lineStart
-    }
-  }
-
   def errorLocation(e: ParseError): Location
   def errorMessage(e: ParseError): String
 
@@ -202,4 +196,16 @@ trait Parsers[Parser[+_]] { self =>
         }
     }
   }
+}
+
+case class ParseError(stack: Stack[(Location, String)])
+
+case class Location(input: String, offset: Int = 0) {
+  lazy val line = input.slice(0, offset + 1).count(_ == '\n') + 1
+  lazy val col = input.slice(0, offset + 1).lastIndexOf('\n') match {
+    case -1 => offset + 1
+    case lineStart => offset - lineStart
+  }
+
+  lazy val tail = input.substring(offset)
 }
