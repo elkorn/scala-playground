@@ -10,18 +10,18 @@ class MyParserSpec extends FlatSpec with Matchers with EitherOps {
 
   "string" should "detect if the input starts with a string" in {
     string("abra").run("abracadabra") shouldSucceedWith ("abra")
-    string("abra").run("cabracadabra") shouldFail
+    string("abra").run("cabracadabra") shouldFail ()
   }
 
   "char" should "detect if the input starts with a character" in {
     char('a').run("abracadabra") shouldSucceedWith ('a')
-    char('b').run("abracadabra") shouldFail
+    char('b').run("abracadabra") shouldFail ()
   }
 
   "regex" should "detect parts of the input that match a regexp" in {
     P.regex("(abra)+".r).run("abraabraabra") shouldSucceedWith ("abraabraabra")
     P.regex("(abra)+".r).run("abracadabraabraabra") shouldSucceedWith ("abra")
-    P.regex("(abra)+".r).run("cadabraabraabra") shouldFail
+    P.regex("(abra)+".r).run("cadabraabraabra") shouldFail ()
   }
 
   "flatMap" should "apply a mapping fn and flatten the result" in {
@@ -38,7 +38,7 @@ class MyParserSpec extends FlatSpec with Matchers with EitherOps {
 
   "or" should "not try out the right branch if the left one has been commited to" in {
     val p = P.fail() | string("abra")
-    p.run("abracadabra") shouldFail
+    p.run("abracadabra") shouldFail ()
   }
 
   "many" should "detect a list of matches" in {
@@ -54,11 +54,19 @@ class MyParserSpec extends FlatSpec with Matchers with EitherOps {
   }
 
   "fail" should "create an always failing parser" in {
-    P.fail().run("agpidahgpiadg") shouldFail
+    P.fail().run("agpidahgpiadg") shouldFail ()
   }
 
   "surround" should "detect matches surrounded with specified other matches" in {
     string("test").surround(char('['), char(']')).run("[test]") shouldSucceedWith ("test")
-    string("test").surround(char('['), char(']')).run("{test}") shouldFail
+    string("test").surround(char('['), char(']')).run("{test}") shouldFail ()
+  }
+
+  "manySeparated" should "recognize multiple matches separated by a given parser" in {
+    char('a').manySeparated(char(',')).run("a,a,a") shouldSucceedWith (List('a', 'a', 'a'))
+    char('a').manySeparated(char(',')).run("a,,") shouldFail ()
+    char('a').manySeparated(char(',')).or(listOfN(0, char('a'))).run("") shouldSucceedWith (Nil: List[Char])
+    char('a').manySeparated(char(',')).run(",a,a") shouldFail ()
+    char('a').manySeparated(char(',')).run("a,a,") shouldFail ()
   }
 }

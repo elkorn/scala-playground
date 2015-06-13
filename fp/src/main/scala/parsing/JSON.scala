@@ -11,36 +11,42 @@ object JSON {
   case class JArray(get: IndexedSeq[JSON]) extends JSON
   case class JObject(get: Map[String, JSON]) extends JSON
 
-  def jsonParser[Parser[+_]](P: Parsers[Parser]): Parser[JSON] = {
+  case class JSONParserLiteralOps[Parser[+_]](P: Parsers[Parser]) {
     import P._
 
-    val whitespace = "\\s".r.many.slice
-    val notQuote = "[^\"\']*".r
+    def whitespace = "\\s".r.many.slice
+    def notQuote = "[^\"\']*".r
 
-    val jNull = string("null").map(_ => JNull)
-    val str: Parser[String] = (notQuote surround (char('\''), char('\''))) | (notQuote surround (char('"'), char('"')))
-    val jStr: Parser[JString] = str.map(str => JString(str))
-    val number: Parser[JNumber] = "\\d+(\\.\\d+)?".r.map(str => JNumber(str.toDouble))
-    val bool = "true|false".r.map(str => JBool(str.toBoolean))
-    val literal: Parser[JSON] = jNull | jStr | number | bool
-    def sep(c: Char) = whitespace ** char(',') ** whitespace
-    val array: Parser[JArray] = literal
+    def str: Parser[String] = (notQuote surround (char('\''), char('\''))) | (notQuote surround (char('"'), char('"')))
+    def sep(c: Char) = whitespace ** char(c) ** whitespace
+    def jNull = string("null").map(_ => JNull)
+    def jStr: Parser[JString] = str.map(JString(_))
+    def jNumber: Parser[JNumber] = "\\d+(\\.\\d+)?".r.map(str => JNumber(str.toDouble))
+    def jBool = "true|false".r.map(str => JBool(str.toBoolean))
+    def literal: Parser[JSON] = jNull | jStr | jNumber | jBool
+    def jArray: Parser[JArray] = literal
       .manySeparated(sep(','))
       .surround(sep('['), sep(']'))
       .map(list => JArray(list.toIndexedSeq))
+  }
 
-    lazy val kv: Parser[(String, JSON)] = for {
+  def jsonParser[Parser[+_]](P: Parsers[Parser]): Parser[JSON] = {
+    import P._
+    val ops = JSONParserLiteralOps(P)
+    import ops._
+
+    def kv: Parser[(String, JSON)] = for {
       k <- str
       _ <- sep(':')
-      v <- literal | array | obj
+      v <- literal | jArray | obj
     } yield (k, v)
 
-    lazy val obj: Parser[JObject] = kv.manySeparated(sep(',')).surround(sep('{'), sep('}'))
+    def obj: Parser[JObject] = kv.manySeparated(sep(',')).surround(sep('{'), sep('}'))
       .map(list => JObject(list.toMap))
 
     for {
       _ <- whitespace
-      json <- literal | array | obj
+      json <- literal | jArray | obj
       _ <- whitespace
     } yield json
   }

@@ -6,7 +6,7 @@ trait EitherOps {
   self: Matchers =>
 
   case class EitherOps[A, B](either: Either[A, B]) {
-    def shouldFail = either shouldBe a[Left[_, _]]
+    def shouldFail() = either shouldBe a[Left[_, _]]
 
     def shouldSucceedWith(expected: B) = either should equal(Right(expected))
   }

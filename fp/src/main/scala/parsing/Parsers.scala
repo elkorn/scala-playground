@@ -18,9 +18,7 @@ trait Parsers[Parser[+_]] { self =>
   implicit def regex(r: Regex): Parser[String]
 
   def char(c: Char): Parser[Char] = {
-    println(s"Creating char for '$c'")
     string(c.toString()) map (str => {
-      println(s"Got $str")
       str.charAt(0)
     })
   }
@@ -64,9 +62,9 @@ trait Parsers[Parser[+_]] { self =>
     p.many.slice.map(_.size) // References String.size, which runs in constant time as it does not need to construct anything.
 
   def atLeastOne[A](p: Parser[A]): Parser[List[A]] =
-    p.many.map {
-      case Nil => throw new RuntimeException("Errors need to be handled better :)")
-      case nonEmptyList => nonEmptyList
+    p.many.flatMap {
+      case Nil => fail("Expected at least one element, got 0.")
+      case nonEmptyList => succeed(nonEmptyList)
     }
 
   // These might be needed, but the literal implementations might work as well (I'm doing _ <- everywhere).
@@ -76,14 +74,8 @@ trait Parsers[Parser[+_]] { self =>
   // def skipRight[A](p: Parser[Any], pa: => Parser[A]): Parser[A] =
   //   map2(slice(p), pa)((_, a) => a)
 
-  def manySeparated[A, B](p: Parser[A], separator: Parser[B]): Parser[List[A]] =
-    map2(
-      (for {
-        v <- p
-        _ <- separator
-      } yield v) many,
-      p map (List(_)) or succeed(Nil: List[A])
-    )(_ ::: _)
+  def manySeparated[A, B](p: Parser[A], separator: Parser[B]): Parser[List[A]] = //{
+    map2(listOfN(1, p), separator.flatMap(_ => p).many)(_ ::: _) | listOfN(1, p)
 
   def zeroOrManyAndAtLeastOne[A](p1: Parser[A], p2: Parser[A]): Parser[(Int, Int)] =
     p1.count ** p2.atLeastOne.count
@@ -141,6 +133,7 @@ trait Parsers[Parser[+_]] { self =>
     def atLeastOne = self.atLeastOne(p)
     def surround[B](left: Parser[B], right: Parser[B]) = self.surround(p, left, right)
     def manySeparated[B](separator: Parser[B]) = self.manySeparated(p, separator)
+    def run(input: String) = self.run(p)(input)
   }
 
   object Laws {

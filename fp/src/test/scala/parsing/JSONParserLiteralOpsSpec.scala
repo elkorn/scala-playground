@@ -31,7 +31,7 @@ class JSONParserLiteralOpsSpec extends FlatSpec with Matchers with EitherOps {
     jNumber.run("2 3. 000") shouldFail
   }
 
-  // "jArray" should "recognize arrays" in {
-  //   jArray.run("[1,2,3]") shouldSucceedWith JArray(List(JNumber(1.0), JNumber(2.0), JNumber(3.0)).toIndexedSeq)
-  // }
+  "jArray" should "recognize arrays" in {
+    jArray.run("[1,2,3]") shouldSucceedWith JArray(List(JNumber(1.0), JNumber(2.0), JNumber(3.0)).toIndexedSeq)
+  }
 }

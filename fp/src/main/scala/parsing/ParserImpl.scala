@@ -57,7 +57,7 @@ trait MyParsers extends Parsers[Parser] {
 
   def string(s: String): Parser[String] = {
     case state @ ParseState(_) if state.input.startsWith(s) => ParseSuccess(s, s.length)
-    case state => ParseFailure(state.toError(s"Expected: $s."), false)
+    case state => ParseFailure(state.toError(s"""Expected: "$s", got "${state.input.substring(0, s.length min state.input.length)}"."""), false)
   }
 
   def fail[A](msg: String = "fail() called."): Parser[A] =
