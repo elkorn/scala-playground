@@ -59,6 +59,12 @@ object Monoid {
     def zero = (a: A) => a
   }
 
+  def concatenate[A](as: List[A], m: Monoid[A]): A =
+    as.foldLeft(m.zero)(m.op)
+
+  def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
+    concatenate(as.map(f), m)
+
   private object Laws {
     def supportsAssociativity[A](m: Monoid[A])(a1: A, a2: A, a3: A) =
       m.op(m.op(a1, a2), a3) == m.op(a1, m.op(a2, a3))
@@ -89,5 +95,4 @@ object Monoid {
         supportsAssociativity(m)(a1, a2, a3)(v) && supportsIdentity(m)(a1)(v)
     }
   }
-
 }

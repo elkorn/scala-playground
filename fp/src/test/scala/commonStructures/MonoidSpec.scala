@@ -23,4 +23,16 @@ class MonoidSpec extends FlatSpec with Matchers {
       )
     Prop.check(endoLaws) should equal(Gen.Result.Proven)
   }
+
+  "concatenate" should "work for folding" in {
+    Prop.check(Gen.forAll(Gen.listOfN(10, Gen.choose(10, 20))) { list =>
+      Monoid.concatenate(list, Monoid.intAddition) == list.foldLeft(0)(_ + _)
+    }) should equal(Gen.Result.Proven)
+  }
+
+  "foldMap" should "apply the mapping fn and fold" in {
+    Prop.check(Gen.forAll(Gen.listOfN(10, Gen.choose(10, 20))) { list =>
+      Monoid.foldMap(list, Monoid.string)(_.toString) == list.map(_.toString).foldLeft("")(_ + _)
+    }) should equal(Gen.Result.Proven)
+  }
 }
