@@ -22,9 +22,9 @@ object Prop {
     case object Exhausted extends Status
   }
 
-  def &&(p1: Prop, p2: Prop): Prop = Prop { (max, n, rng) =>
-    p1.check(max, n, rng) match {
-      case Right(Status.Unfalsified) => p2.check(max, n, rng) match {
+  def &&(p1: Prop, p2: Prop): Prop = Prop { (max, n, exhaust, rng) =>
+    p1.check(max, n, exhaust, rng) match {
+      case Right(Status.Unfalsified) => p2.check(max, n, exhaust, rng) match {
         case ok @ Right(_) => ok
         case falsified => falsified
       }
@@ -34,10 +34,10 @@ object Prop {
     }
   }
 
-  def ||(p1: Prop, p2: Prop): Prop = Prop { (max, n, rng) =>
-    p1.check(max, n, rng) match {
+  def ||(p1: Prop, p2: Prop): Prop = Prop { (max, n, exhaust, rng) =>
+    p1.check(max, n, exhaust, rng) match {
       case ok @ Right(_) => ok
-      case Left((msg, f)) => p2.tag(msg).check(max, n, rng)
+      case Left((msg, f)) => p2.tag(msg).check(max, n, exhaust, rng)
     }
   }
 
@@ -45,9 +45,10 @@ object Prop {
     p: Prop,
     maxSize: Int = 100,
     testCases: Int = 100,
+    exhaustDomain: Boolean = false,
     rng: RNG = SimpleRNG(System.currentTimeMillis)
   ): Result = {
-    val r = p.check(maxSize, testCases, rng)
+    val r = p.check(maxSize, testCases, exhaustDomain, rng)
     r match {
       case Left((msg, count)) =>
         println(s"! Falsified after $count passed tests:\n $msg")
@@ -66,12 +67,12 @@ object Prop {
   }
 }
 
-case class Prop(check: (MaxSize, TestCases, RNG) => Prop.Result) {
+case class Prop(check: (MaxSize, TestCases, Boolean, RNG) => Prop.Result) {
   def &&(p: Prop): Prop = Prop.&&(this, p)
   def ||(p: Prop): Prop = Prop.||(this, p)
   def tag(msg: String): Prop = {
     val originalCheck = check
-    Prop((max, n, rng) => originalCheck(max, n, rng) match {
+    Prop((max, n, exhaust, rng) => originalCheck(max, n, exhaust, rng) match {
       case ok @ Right(Status.Unfalsified | Status.Proven) => ok
       case falsified @ Left((fail, count)) => Left((s"$msg\n$fail", count))
     })

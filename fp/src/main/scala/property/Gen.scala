@@ -48,7 +48,7 @@ object Gen {
       s"stack strace:\n${e.getStackTrace().mkString("\n")}"
 
   def forAll[A](a: Gen[A])(f: A => Boolean): Prop = Prop {
-    (_, n, rng) =>
+    (max, n, exhaustDomain, rng) =>
       {
         def go(cur: Int, end: Int, domain: Domain[A], onDomainExhausted: Prop.Result): Prop.Result = {
           def check(h: A, t: Domain[A]): Prop.Result =
@@ -66,7 +66,10 @@ object Gen {
                 // Take the cur and end values only if the number of test cases is smaller than the domain size.
                 if (n < x.size && cur == end) Result.Unfalsified
                 else check(hf(), t)
-              case x @ InfiniteDomain(hf, t) => check(hf(), t)
+              case x @ InfiniteDomain(hf, t) =>
+                println(s"InfiniteDomain, $cur of $end")
+                if (cur == end) Result.Unfalsified
+                else check(hf(), t)
             }
           }
         }
@@ -85,12 +88,12 @@ object Gen {
     forAll(g.apply(_))(f)
 
   def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop {
-    (max, n, rng) =>
+    (max, n, exhaust, rng) =>
       {
         val casesPerSize = n / max + 1
         val props: Stream[Prop] = Stream.from(0).take(max + 1).map(i => forAll(g(i))(f))
-        val finalProp = props.map(p => Prop((max, _, rng) => p.check(max, casesPerSize, rng))).toList.reduce(_ && _)
-        finalProp.check(max, n, rng).right.map {
+        val finalProp = props.map(p => Prop((max, _, exhaust, rng) => p.check(max, casesPerSize, exhaust, rng))).toList.reduce(_ && _)
+        finalProp.check(max, n, exhaust, rng).right.map {
           case Prop.Status.Proven => Prop.Status.Exhausted
           case x => x
         }
@@ -120,7 +123,6 @@ object Gen {
   def weighted[A](g1: (Gen[A], Double), g2: (Gen[A], Double)): Gen[A] = {
     val g1Threshold = g1._2.abs / (g1._2.abs + g2._2.abs)
     def distribution: Domain[Boolean] = InfiniteDomain(randomStream(uniform.map(_ < g1Threshold))(SimpleRNG(12345L)))
-
     Gen(
       State(RNG.double).flatMap(x => if (x < g1Threshold) g1._1.sample else g2._1.sample),
       interleave(distribution, g1._1.domain, g2._1.domain)
@@ -180,8 +182,10 @@ object Gen {
     Gen(
       g.sample.flatMap(a => f(a).sample),
       g.domain match {
-        case x @ FiniteDomain(_, _) => x.flatMap(x => f(x).domain.finite)
-        case x @ InfiniteDomain(_, _) => x.flatMap(x => f(x).domain.infinite)
+        case x @ FiniteDomain(_, _) =>
+          x.flatMap(x => f(x).domain.finite)
+        case x @ InfiniteDomain(_, _) =>
+          x.flatMap(x => f(x).domain.infinite)
       }
     )
 

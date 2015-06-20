@@ -93,6 +93,25 @@ object Par {
   def areEqual[A](p1: Par[A], p2: Par[A]): Par[Boolean] =
     map2(p1, p2)(_ == _)
 
+  def sequence[A](as: List[Par[A]]): Par[List[A]] = fork {
+    as.reverse.foldLeft(Par.unit(Nil: List[A]))((pr, pa) => map2(pa, pr)(_ :: _))
+  }
+
+  def sequenceBalanced[A](as: IndexedSeq[Par[A]]): Par[IndexedSeq[A]] = fork {
+    if (as.isEmpty) unit(Vector())
+    else if (as.length == 1) map(as.head)(Vector(_))
+    else {
+      val (left, right) = as.splitAt(as.length / 2)
+      map2(sequenceBalanced(left), sequenceBalanced(right))(_ ++ _)
+    }
+  }
+
+  def parMap[A, B](as: List[A])(f: A => B): Par[List[B]] =
+    sequence(as.map(asyncF(f)))
+
+  def parMap[A, B](as: IndexedSeq[A])(f: A => B): Par[IndexedSeq[B]] =
+    sequenceBalanced(as.map(asyncF(f)))
+
   def map[A, B](pa: Par[A])(f: A => B): Par[B] =
     (es: ExecutorService) => new Future[B] {
       def apply(cb: Callback[B]): Unit = {

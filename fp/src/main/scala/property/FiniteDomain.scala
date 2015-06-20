@@ -20,6 +20,8 @@ private[domain] class FiniteDomain[+A](private[domain] val as: Stream[A], privat
   def size = totalSize
   def take(n: Int) = new FiniteDomain(as.take(n), n min size)
   def flatMap[B](f: A => FiniteDomain[B]): FiniteDomain[B] = new FiniteDomain(as.map(f(_).head()), size)
+  // FIXME it should look like this.
+  // def flatMap[B](f: A => FiniteDomain[B]): FiniteDomain[B] = new FiniteDomain(as.flatMap(f(_).finite.as), size)
   def map[B](f: A => B) = new FiniteDomain(as map f, size)
   def map2[B, C](db: FiniteDomain[B])(f: (A, B) => C) = FiniteDomain.map2(this, db)(f)
   def foldRight[B](z: B)(f: (A, => B) => B) = as.foldRight(z)(f)
