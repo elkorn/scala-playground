@@ -2,6 +2,8 @@ package fp.commonStructures
 
 import fp.property.Gen
 import fp.property.Prop
+import fp.state.parallelism.Par
+import fp.state.parallelism.parallelism.Par
 
 /*
  A monoid consists of:
@@ -59,11 +61,53 @@ object Monoid {
     def zero = (a: A) => a
   }
 
+  def par[A](m: Monoid[A]): Monoid[Par[A]] = new Monoid[Par[A]] {
+    def op(pa1: Par[A], pa2: Par[A]): Par[A] =
+      Par.flatMap(pa1)(a1 => Par.map(pa2)(a2 => m.op(a1, a2)))
+    def zero = Par.unit(m.zero)
+  }
+
   def concatenate[A](as: List[A], m: Monoid[A]): A =
     as.foldLeft(m.zero)(m.op)
 
   def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
-    concatenate(as.map(f), m)
+    as.foldLeft(m.zero)((b, a) => m.op(b, f(a)))
+
+  def foldRight[A, B](as: List[A])(z: B)(f: (A, B) => B): B =
+    foldMap(as, endoMonoid[B])(f.curried)(z)
+
+  def foldLeft[A, B](as: List[A])(z: B)(f: (B, A) => B): B =
+    foldMap(as, endoMonoid[B])(a => b => f(b, a))(z)
+
+  def foldMapV[A, B](v: IndexedSeq[A], m: Monoid[B])(f: A => B): B =
+    if (v.length == 1) f(v.head)
+    else {
+      val (left, right) = v.splitAt(v.length / 2)
+      m.op(foldMapV(left, m)(f), foldMapV(right, m)(f))
+    }
+
+  def parFoldMapV[A, B](v: IndexedSeq[A], m: Monoid[B])(f: A => B): Par[B] =
+    Par.flatMap(Par.parMap(v)(f))(bs => foldMapV(bs, par(m))(Par.lazyUnit(_)))
+
+  def ordered(ns: IndexedSeq[Int])(order: (Int, Int) => Boolean): Boolean = {
+    val monoid = new Monoid[Option[(Int, Int, Boolean)]] {
+      def op(o1: Option[(Int, Int, Boolean)], o2: Option[(Int, Int, Boolean)]) = (o1, o2) match {
+        case (Some((min1, max1, p)), Some((min2, max2, q))) =>
+          // It doesn't really matter whether min or max comes first as long as the ordering condition is maintained.
+          // It could also be:
+          // Some(min1 max min2, max1 min max2, p && q && min1 <= max2)
+          Some((min1 min min2, max1 max max2, p && q && order(min1, max2)))
+        case (x, None) => x
+        case (None, x) => x
+      }
+
+      val zero = None
+    }
+
+    // (n => Some(n,n,true)) -> each element by itself is ordered
+    // .getOrElse(true)      -> empty sequence is ordered
+    foldMapV(ns, monoid)(n => Some(n, n, true)).map(t => t._3).getOrElse(true)
+  }
 
   private object Laws {
     def supportsAssociativity[A](m: Monoid[A])(a1: A, a2: A, a3: A) =
@@ -77,7 +121,6 @@ object Monoid {
 
     def supportsIdentity[A](m: Monoid[A => A])(a: A => A)(v: A) =
       m.op(a, m.zero)(v) == a(v) && m.op(m.zero, a)(v) == a(v)
-
   }
 
   def laws[A](m: Monoid[A], gen: Gen[A]): Prop = {

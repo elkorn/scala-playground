@@ -35,4 +35,9 @@ class MonoidSpec extends FlatSpec with Matchers {
       Monoid.foldMap(list, Monoid.string)(_.toString) == list.map(_.toString).foldLeft("")(_ + _)
     }) should equal(Gen.Result.Proven)
   }
+
+  "ordered" should "determine whether an indexed seq is ordered" in {
+    Monoid.ordered(List(1, 2, 3, 4, 5).toIndexedSeq)(_ <= _) should equal(true)
+    Monoid.ordered(List(1, 2, 3, 4, 5).reverse.toIndexedSeq)(_ <= _) should equal(false)
+  }
 }
