@@ -80,7 +80,8 @@ object Monoid {
     foldMap(as, endoMonoid[B])(a => b => f(b, a))(z)
 
   def foldMapV[A, B](v: IndexedSeq[A], m: Monoid[B])(f: A => B): B =
-    if (v.length == 1) f(v.head)
+    if (v.isEmpty) m.zero
+    else if (v.length == 1) f(v.head)
     else {
       val (left, right) = v.splitAt(v.length / 2)
       m.op(foldMapV(left, m)(f), foldMapV(right, m)(f))
