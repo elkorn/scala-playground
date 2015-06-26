@@ -39,6 +39,8 @@ sealed trait Stream[+A] {
     case _ => z
   }
 
+  def foldLeft[B](z: => B)(f: (=> B, => A) => B): B = Stream.foldLeft(this)(z)(f)
+
   def exists(p: A => Boolean): Boolean =
     foldRight(false)((a, b) => p(a) || b)
 
@@ -153,6 +155,11 @@ object Stream {
 
   def from(n: Int): Stream[Int] =
     cons(n, from(n + 1))
+
+  def foldLeft[A, B](as: Stream[A])(z: => B)(f: (=> B, => A) => B): B = as match {
+    case Cons(h, t) => foldLeft(t())(f(z, h()))(f)
+    case Empty => z
+  }
 
   def fibs(): Stream[Int] = {
     def go(prev1: Int, prev2: Int): Stream[Int] =
