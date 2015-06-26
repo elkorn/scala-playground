@@ -68,6 +68,11 @@ class FoldableOptionSpecification extends WordSpec with Matchers {
       Foldable.option.foldMap(Some(12))(_ + 13)(Monoid.intAddition) should equal(25)
       Foldable.option.foldMap[Int, Int](None)(_ + 13)(Monoid.intAddition) should equal(0)
     }
+
+    "be toListable" in {
+      Foldable.option.toList(Some(12)) should equal(List(12))
+      Foldable.option.toList[Int](None) should equal(Nil: List[Int])
+    }
   }
 
 }

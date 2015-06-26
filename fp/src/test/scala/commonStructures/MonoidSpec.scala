@@ -40,4 +40,19 @@ class MonoidSpec extends FlatSpec with Matchers {
     Monoid.ordered(List(1, 2, 3, 4, 5).toIndexedSeq)(_ <= _) should equal(true)
     Monoid.ordered(List(1, 2, 3, 4, 5).reverse.toIndexedSeq)(_ <= _) should equal(false)
   }
+
+  "product" should "zip two monoids into a tuple" in {
+    val plusMult = Monoid.product(Monoid.intAddition, Monoid.intMultiplication)
+    plusMult.op((3, 7), (5, 8)) should equal((8, 56))
+    plusMult.zero should equal((0, 1))
+  }
+
+  "mapMergeValues" should "use a monoid to merge two maps" in {
+    Monoid.mapMergeValues(Monoid.intAddition).op(Map("a" -> 112, "b" -> 13), Map("a" -> 57, "b" -> 6)) should equal(Map("a" -> 169, "b" -> 19))
+  }
+
+  "function" should "handle functions with another monoid" in {
+    Monoid.function(Monoid.intMultiplication).op((n: Int) => n + 8, (n: Int) => n + 9)(13) should equal((13 + 8) * (13 + 9))
+    Monoid.function(Monoid.intMultiplication).zero(13) should equal(Monoid.intMultiplication.zero)
+  }
 }

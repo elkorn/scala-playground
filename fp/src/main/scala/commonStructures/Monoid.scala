@@ -110,6 +110,26 @@ object Monoid {
     foldMapV(ns, monoid)(n => Some(n, n, true)).map(t => t._3).getOrElse(true)
   }
 
+  def product[A, B](ma: Monoid[A], mb: Monoid[B]): Monoid[(A, B)] =
+    new Monoid[(A, B)] {
+      def op(ab1: (A, B), ab2: (A, B)) =
+        (ma.op(ab1._1, ab2._1), mb.op(ab1._2, ab2._2))
+
+      val zero = (ma.zero, mb.zero)
+    }
+
+  def mapMergeValues[K, V](v: Monoid[V]): Monoid[Map[K, V]] =
+    new Monoid[Map[K, V]] {
+      def zero = Map[K, V]()
+      def op(m1: Map[K, V], m2: Map[K, V]) = (m1.keySet ++ m2.keySet).foldLeft(zero)((result, key) => result.updated(key, v.op(m1.getOrElse(key, v.zero), m2.getOrElse(key, v.zero))))
+    }
+
+  def function[A, B](mb: Monoid[B]): Monoid[A => B] =
+    new Monoid[A => B] {
+      def op(f: A => B, g: A => B) = (a: A) => mb.op(f(a), g(a))
+      val zero = (a: A) => mb.zero
+    }
+
   private object Laws {
     def supportsAssociativity[A](m: Monoid[A])(a1: A, a2: A, a3: A) =
       m.op(m.op(a1, a2), a3) == m.op(a1, m.op(a2, a3))
