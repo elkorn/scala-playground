@@ -65,4 +65,17 @@ object Foldable {
       case Branch(l, r) => mb.op(foldMap(l)(f)(mb), foldMap(r)(f)(mb))
     }
   }
+
+  val option = new Foldable[Option] {
+    def foldRight[A, B](as: Option[A])(z: B)(f: (A, B) => B): B = as match {
+      case Some(a) => f(a, z)
+      case None => z
+    }
+
+    def foldLeft[A, B](as: Option[A])(z: B)(f: (B, A) => B): B =
+      foldRight(as)(z)((a, b) => f(b, a))
+
+    def foldMap[A, B](as: Option[A])(f: A => B)(mb: Monoid[B]): B =
+      foldRight(as)(mb.zero)((a, b) => mb.op(f(a), b))
+  }
 }

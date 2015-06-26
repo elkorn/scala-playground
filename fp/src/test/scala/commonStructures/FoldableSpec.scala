@@ -4,6 +4,7 @@ import org.scalacheck.Properties
 import org.scalacheck.Gen
 import org.scalacheck.Arbitrary
 import org.scalacheck.Prop.forAll
+import org.scalatest._
 import fp.Lazy.Stream
 import fp.functionalDataStructures.{ Tree, Branch, Leaf }
 import scala.util.Random
@@ -49,4 +50,24 @@ object FoldableTreeSpecification extends Properties("Foldable Tree") {
   property("foldLeft") = forAll(GenTree.tree) { (ns: Tree[Int]) => Foldable.tree.foldLeft(ns)(0)(_ + _) == Tree.fold(ns)(a => a)(_ + _) }
   property("foldRight") = forAll(GenTree.tree) { (ns: Tree[Int]) => Foldable.tree.foldRight(ns)(0)(_ + _) == Tree.fold(ns)(a => a)(_ + _) }
   property("foldMap") = forAll(GenTree.tree) { (ns: Tree[Int]) => Foldable.tree.foldMap(ns)(_ + 1)(Monoid.intAddition) == Tree.fold(ns)(_ + 1)(_ + _) }
+}
+
+class FoldableOptionSpecification extends WordSpec with Matchers {
+  "Option foldable" should {
+    "fold left" in {
+      Foldable.option.foldLeft(Some(12))(13)(_ + _) should equal(25)
+      Foldable.option.foldLeft[Int, Int](None)(13)(_ + _) should equal(13)
+    }
+
+    "fold right" in {
+      Foldable.option.foldRight(Some(12))(13)(_ + _) should equal(25)
+      Foldable.option.foldRight[Int, Int](None)(13)(_ + _) should equal(13)
+    }
+
+    "fold map" in {
+      Foldable.option.foldMap(Some(12))(_ + 13)(Monoid.intAddition) should equal(25)
+      Foldable.option.foldMap[Int, Int](None)(_ + 13)(Monoid.intAddition) should equal(0)
+    }
+  }
+
 }
