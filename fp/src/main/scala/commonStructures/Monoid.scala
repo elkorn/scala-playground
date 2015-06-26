@@ -130,6 +130,19 @@ object Monoid {
       val zero = (a: A) => mb.zero
     }
 
+  def bag[A](as: IndexedSeq[A]): Map[A, Int] = {
+    val merge = mapMergeValues[A, Int](intAddition)
+    as.foldLeft(merge.zero)((m, a) => merge.op(m, Map(a -> 1)))
+  }
+
+  def bag_2[A](as: IndexedSeq[A]): Map[A, Int] =
+    foldMapV(as, mapMergeValues[A, Int](intAddition))(a => Map(a -> 1))
+
+  def mean(ns: List[Int]): Double = {
+    val (sum, count) = Foldable.list.foldMap(ns)(a => (a, 1))(product(intAddition, intAddition))
+    sum / count.toDouble
+  }
+
   private object Laws {
     def supportsAssociativity[A](m: Monoid[A])(a1: A, a2: A, a3: A) =
       m.op(m.op(a1, a2), a3) == m.op(a1, m.op(a2, a3))

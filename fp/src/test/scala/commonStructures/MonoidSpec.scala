@@ -55,4 +55,19 @@ class MonoidSpec extends FlatSpec with Matchers {
     Monoid.function(Monoid.intMultiplication).op((n: Int) => n + 8, (n: Int) => n + 9)(13) should equal((13 + 8) * (13 + 9))
     Monoid.function(Monoid.intMultiplication).zero(13) should equal(Monoid.intMultiplication.zero)
   }
+
+  "bag" should "count the occurences of elements in a sequence" in {
+    Monoid.bag(Vector('1', '2', '3', '1')) should equal(Map('1' -> 2, '2' -> 1, '3' -> 1))
+    Monoid.bag(Vector("a", "rose", "is", "a", "rose")) should equal(Map("a" -> 2, "rose" -> 2, "is" -> 1))
+  }
+
+  "bag_2" should "behave the same as bag" in {
+    Monoid.bag_2(Vector('1', '2', '3', '1')) should equal(Monoid.bag(Vector('1', '2', '3', '1')))
+    Monoid.bag_2(Vector("a", "rose", "is", "a", "rose")) should equal(Monoid.bag(Vector("a", "rose", "is", "a", "rose")))
+  }
+
+  "mean" should "compute the mean of an iterable" in {
+    val input = List(1, 2, 3, 4, 5)
+    Monoid.mean(input) should equal(input.sum / input.length.toDouble)
+  }
 }
