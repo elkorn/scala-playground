@@ -9,6 +9,7 @@ import fp.state.parallelism.parallelism.Par
 
 
 trait Monad[F[_]] {
+  implicit def operators[A](ma: F[A]) = MonadOps[A](ma)
   def unit[A](a: A): F[A]
   def flatMap[A, B](ma: F[A])(f: A => F[B]): F[B]
 
@@ -17,6 +18,27 @@ trait Monad[F[_]] {
 
   def map2[A, B, C](ma: F[A], mb: F[B])(f: (A, B) => C): F[C] =
     flatMap(ma) (a => map(mb)(b => f(a,b)))
+
+  def sequence[A](lma: List[F[A]]): F[List[A]] =
+    lma.foldRight(unit(Nil:List[A]))((a, res) => map2(a, res)(_::_))
+
+  def traverse[A,B](lma: List[F[A]])(f: A => F[B]): F[List[B]] =
+    lma.foldRight(unit(Nil:List[B]))((a, res) => map2(flatMap(a)(f), res)(_ :: _))
+
+  def replicateM[A](n: Int, ma: F[A]): F[List[A]] =
+    if(n < 1) unit(List())
+    else map2(ma, replicateM(n-1, ma))(_ :: _)
+
+  def product[A,B](ma: F[A], mb: F[B]): F[(A,B)] =
+    map2(ma, mb)((_,_))
+
+  def filterM[A](ms: List[A])(f: A => F[Boolean]): F[List[A]] =
+    ms match {
+      case Nil => unit(Nil:List[A])
+      case h :: t => flatMap(f(h))(b =>
+        if (b) map(filterM(t)(f))(h :: _)
+        else filterM(t)(f))
+    }
 }
 
 object Monad {
